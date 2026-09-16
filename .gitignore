@@ -1,0 +1,46 @@
+# Environment — never push
+.env
+.env.local
+.env.production
+
+# Virtual environment
+.nyaymitra/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ChromaDB data
+data/chroma_db/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+test.py
+test_*.py
+
+# Evaluation results
+evaluation/results.json
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Node (future frontend)
+node_modules/
+.next/

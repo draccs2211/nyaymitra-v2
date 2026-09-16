@@ -1,0 +1,36 @@
+# Core
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic
+httpx
+
+# LangChain + LangGraph
+langchain
+langgraph
+langchain-community
+langchain-openai
+langsmith
+
+# MCP
+fastmcp
+
+# RAG
+chromadb
+rank-bm25
+sentence-transformers
+cohere
+
+# Evaluation
+ragas
+
+# Database
+redis
+psycopg2-binary
+sqlalchemy
+
+# Utils
+tiktoken
+requests
+python-jose[cryptography]
+passlib[bcrypt]
