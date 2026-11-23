@@ -2,30 +2,44 @@ from backend.database.connection import get_redis
 from backend.config import QUERY_CACHE_TTL, EMBEDDING_CACHE_TTL, LLM_CACHE_TTL
 import hashlib
 import json
-import pickle
-from typing import Any, Optional
+from typing import Optional
 
 
 redis_client = get_redis()
 
+# Bump to invalidate all cached entries (e.g. after prompt/corpus changes)
+CACHE_VERSION = "v2"
 
-def make_key(prefix: str, data: str) -> str:
-    return f"nyaymitra:{prefix}:{hashlib.md5(data.encode()).hexdigest()}"
+
+def make_key(prefix: str, *parts: str) -> str:
+    """SHA-256 key over all parts; unit separator prevents ambiguous joins."""
+    data = "".join(str(p) for p in parts)
+    digest = hashlib.sha256(data.encode("utf-8")).hexdigest()
+    return f"nyaymitra:{CACHE_VERSION}:{prefix}:{digest}"
 
 
-def get_cached_query(query: str, domain: str = "") -> Optional[dict]:
-    key = make_key("query", f"{query}{domain}")
+def _query_key(query: str, scope: str, language: str, domain: str) -> str:
+    if not scope:
+        # Never share query results across tenants/users
+        raise ValueError("cache scope (user id) is required")
+    return make_key("query", scope, language, domain, query)
+
+
+def get_cached_query(query: str, *, scope: str, language: str = "", domain: str = "") -> Optional[dict]:
     try:
-        cached = redis_client.get(key)
+        cached = redis_client.get(_query_key(query, scope, language, domain))
         if cached:
             return json.loads(cached)
+    except ValueError:
+        raise
     except Exception:
         pass
     return None
 
 
-def set_cached_query(query: str, domain: str, response: dict, ttl: int = QUERY_CACHE_TTL):
-    key = make_key("query", f"{query}{domain}")
+def set_cached_query(query: str, response: dict, *, scope: str, language: str = "",
+                     domain: str = "", ttl: int = QUERY_CACHE_TTL):
+    key = _query_key(query, scope, language, domain)
     try:
         redis_client.setex(key, ttl, json.dumps(response, default=str))
     except Exception:
@@ -69,16 +83,22 @@ def set_cached_llm(prompt: str, response: str, ttl: int = LLM_CACHE_TTL):
         pass
 
 
-def store_session(session_id: str, data: dict, ttl: int = 3600):
-    key = make_key("session", session_id)
+def _session_key(session_id: str, user_id: str) -> str:
+    if not user_id:
+        raise ValueError("user_id is required for session access")
+    return make_key("session", user_id, session_id)
+
+
+def store_session(session_id: str, data: dict, *, user_id: str, ttl: int = 3600):
+    key = _session_key(session_id, user_id)
     try:
         redis_client.setex(key, ttl, json.dumps(data, default=str))
     except Exception:
         pass
 
 
-def get_session(session_id: str) -> Optional[dict]:
-    key = make_key("session", session_id)
+def get_session(session_id: str, *, user_id: str) -> Optional[dict]:
+    key = _session_key(session_id, user_id)
     try:
         cached = redis_client.get(key)
         if cached:
@@ -88,8 +108,8 @@ def get_session(session_id: str) -> Optional[dict]:
     return None
 
 
-def clear_session(session_id: str):
-    key = make_key("session", session_id)
+def clear_session(session_id: str, *, user_id: str):
+    key = _session_key(session_id, user_id)
     try:
         redis_client.delete(key)
     except Exception:

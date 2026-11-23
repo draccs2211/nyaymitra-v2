@@ -199,14 +199,14 @@ async def process_query(
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get conversation history from session
-    session_data = get_session(session_id) or {}
+    session_data = get_session(session_id, user_id=current_user.id) or {}
     conversation_history = session_data.get("history", [])
 
     # Detect language
     language = detect_language(request.query)
 
     # Check query cache
-    cached = get_cached_query(request.query, "")
+    cached = get_cached_query(request.query, scope=current_user.id, language=language)
     if cached and not request.session_id:
         response_time = int((time.time() - start_time) * 1000)
         return QueryResponse(
@@ -241,11 +241,11 @@ async def process_query(
     # Update conversation history
     conversation_history.append({"role": "user", "content": request.query})
     conversation_history.append({"role": "assistant", "content": result.get("final_response", "")})
-    store_session(session_id, {"history": conversation_history[-20:]})  # Keep last 20 turns
+    store_session(session_id, {"history": conversation_history[-20:]}, user_id=current_user.id)  # Keep last 20 turns
 
     # Cache non-emergency responses
     if not result.get("is_emergency") and not request.session_id:
-        set_cached_query(request.query, "", result)
+        set_cached_query(request.query, result, scope=current_user.id, language=language)
 
     # Log query in background
     background_tasks.add_task(
