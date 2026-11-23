@@ -34,3 +34,6 @@ tiktoken
 requests
 python-jose[cryptography]
 passlib[bcrypt]
+# Testing
+pytest
+pytest-asyncio

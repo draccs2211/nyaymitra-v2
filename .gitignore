@@ -30,8 +30,8 @@ Thumbs.db
 logs/
 
 # Test files
-test.py
-test_*.py
+/test.py
+/test_*.py
 
 # Evaluation results
 evaluation/results.json
