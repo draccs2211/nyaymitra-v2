@@ -16,6 +16,7 @@ from backend.config import (
 )
 from backend.database.connection import get_db, get_db_factory, init_db
 from backend.utils.rate_limit import limit_by_ip, limit_by_user
+from backend.versioning import cache_version
 from backend.database.models import User, Firm, Case, Document, QueryLog
 from backend.utils.auth import (
     verify_password, get_password_hash,
@@ -79,6 +80,9 @@ class RegisterRequest(BaseModel):
 
 class QueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=4000)
+    # ISO 3166 code: IN (central) or IN-<state>, e.g. IN-UP. Part of the cache key;
+    # retrieval does not filter by it yet.
+    jurisdiction: str = Field(default="IN", pattern=r"^IN(-[A-Z]{2})?$")
     session_id: Optional[str] = Field(default=None, max_length=100)
     case_id: Optional[str] = Field(default=None, max_length=100)
 
@@ -292,7 +296,9 @@ async def process_query(
     language = detect_language(request.query)
 
     # Check query cache
-    cached = get_cached_query(request.query, scope=current_user.id, language=language)
+    version = cache_version()
+    cached = get_cached_query(request.query, scope=current_user.id, language=language,
+                              jurisdiction=request.jurisdiction, version=version)
     if cached and not request.session_id:
         return _to_response(cached, session_id, int((time.time() - start_time) * 1000))
 
@@ -302,7 +308,8 @@ async def process_query(
             query=request.query,
             session_id=session_id,
             user_id=current_user.id,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            jurisdiction=request.jurisdiction,
         )
     except Exception:
         logger.exception("Pipeline failed (user=%s session=%s)", current_user.id, session_id)
@@ -318,7 +325,8 @@ async def process_query(
     # Cache only final, non-emergency responses — never ones awaiting review
     if (not result.get("is_emergency") and not request.session_id
             and result.get("approval_status") == "not_required"):
-        set_cached_query(request.query, result, scope=current_user.id, language=language)
+        set_cached_query(request.query, result, scope=current_user.id, language=language,
+                         jurisdiction=request.jurisdiction, version=version)
 
     # Log query in background
     background_tasks.add_task(

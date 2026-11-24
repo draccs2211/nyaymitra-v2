@@ -30,19 +30,19 @@ def fake_redis(monkeypatch):
 
 class TestQueryCacheIsolation:
     def test_same_query_not_shared_across_users(self):
-        cache.set_cached_query("landlord deposit", {"final_response": "A"}, scope="user-a")
-        assert cache.get_cached_query("landlord deposit", scope="user-a") == {"final_response": "A"}
-        assert cache.get_cached_query("landlord deposit", scope="user-b") is None
+        cache.set_cached_query("landlord deposit", {"final_response": "A"}, scope="user-a", version="v1")
+        assert cache.get_cached_query("landlord deposit", scope="user-a", version="v1") == {"final_response": "A"}
+        assert cache.get_cached_query("landlord deposit", scope="user-b", version="v1") is None
 
     def test_language_is_part_of_key(self):
-        cache.set_cached_query("q", {"x": 1}, scope="u", language="hi")
-        assert cache.get_cached_query("q", scope="u", language="en") is None
+        cache.set_cached_query("q", {"x": 1}, scope="u", version="v1", language="hi")
+        assert cache.get_cached_query("q", scope="u", version="v1", language="en") is None
 
     def test_scope_required(self):
         with pytest.raises(ValueError):
-            cache.get_cached_query("q", scope="")
+            cache.get_cached_query("q", scope="", version="v1")
         with pytest.raises(ValueError):
-            cache.set_cached_query("q", {}, scope="")
+            cache.set_cached_query("q", {}, scope="", version="v1")
 
     def test_key_is_sha256_and_versioned(self):
         key = cache.make_key("query", "u", "q")
@@ -87,8 +87,8 @@ class TestCircuitBreaker:
         monkeypatch.setattr(cache, "redis_client", down)
         assert cache.get_session("s", user_id="u") is None
         cache.store_session("s", {"h": 1}, user_id="u")
-        cache.set_cached_query("q", {}, scope="u")
-        assert cache.get_cached_query("q", scope="u") is None
+        cache.set_cached_query("q", {}, scope="u", version="v1")
+        assert cache.get_cached_query("q", scope="u", version="v1") is None
         assert down.calls == 1                      # only the first call hit Redis
         assert cache.redis_available() is False
 
@@ -104,4 +104,22 @@ class TestCircuitBreaker:
     def test_scope_validation_still_raises(self, monkeypatch):
         monkeypatch.setattr(cache, "redis_client", DownRedis())
         with pytest.raises(ValueError):
-            cache.get_cached_query("q", scope="")
+            cache.get_cached_query("q", scope="", version="v1")
+
+
+
+class TestCacheKeyVersioning:
+    def test_version_change_misses(self):
+        cache.set_cached_query("q", {"a": 1}, scope="u", version="p1-c1")
+        assert cache.get_cached_query("q", scope="u", version="p1-c1") == {"a": 1}
+        assert cache.get_cached_query("q", scope="u", version="p2-c1") is None   # prompts changed
+        assert cache.get_cached_query("q", scope="u", version="p1-c2") is None   # corpus changed
+
+    def test_jurisdiction_change_misses(self):
+        cache.set_cached_query("q", {"a": 1}, scope="u", version="v", jurisdiction="IN-UP")
+        assert cache.get_cached_query("q", scope="u", version="v", jurisdiction="IN-DL") is None
+        assert cache.get_cached_query("q", scope="u", version="v", jurisdiction="IN-UP") == {"a": 1}
+
+    def test_version_required(self):
+        with pytest.raises(ValueError, match="version"):
+            cache.get_cached_query("q", scope="u", version="")

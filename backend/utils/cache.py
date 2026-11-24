@@ -70,20 +70,24 @@ def cache_set_json(key: str, value, ttl: int) -> None:
     _set_json(key, value, ttl)
 
 
-def _query_key(query: str, scope: str, language: str, domain: str) -> str:
+def _query_key(query: str, scope: str, language: str, jurisdiction: str, version: str) -> str:
     if not scope:
         # Never share query results across tenants/users
         raise ValueError("cache scope (user id) is required")
-    return make_key("query", scope, language, domain, query)
+    if not version:
+        # Answers are only valid for the prompts + corpus that produced them
+        raise ValueError("cache version (backend.versioning.cache_version()) is required")
+    return make_key("query", scope, language, jurisdiction, version, query)
 
 
-def get_cached_query(query: str, *, scope: str, language: str = "", domain: str = "") -> Optional[dict]:
-    return _get_json(_query_key(query, scope, language, domain))
+def get_cached_query(query: str, *, scope: str, version: str, language: str = "",
+                     jurisdiction: str = "IN") -> Optional[dict]:
+    return _get_json(_query_key(query, scope, language, jurisdiction, version))
 
 
-def set_cached_query(query: str, response: dict, *, scope: str, language: str = "",
-                     domain: str = "", ttl: int = QUERY_CACHE_TTL):
-    _set_json(_query_key(query, scope, language, domain), response, ttl)
+def set_cached_query(query: str, response: dict, *, scope: str, version: str, language: str = "",
+                     jurisdiction: str = "IN", ttl: int = QUERY_CACHE_TTL):
+    _set_json(_query_key(query, scope, language, jurisdiction, version), response, ttl)
 
 
 def get_cached_embedding(text: str) -> Optional[list]:

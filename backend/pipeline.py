@@ -184,6 +184,7 @@ async def run_pipeline(
     user_id: str,
     conversation_history: list = None,
     run_id: Optional[str] = None,
+    jurisdiction: str = "IN",
 ) -> dict:
     """Run the graph. If approval is needed, returns with approval_status='pending'."""
     run_id = run_id or str(uuid.uuid4())
@@ -192,6 +193,7 @@ async def run_pipeline(
         session_id=session_id,
         user_id=user_id,
         conversation_history=conversation_history or [],
+        jurisdiction=jurisdiction,
     )
     # Sync invoke in a worker thread: agents are sync (would block the event
     # loop) and interrupt() needs contextvars that ainvoke loses on Python 3.10

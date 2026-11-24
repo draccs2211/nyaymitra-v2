@@ -4,6 +4,8 @@ ownership checks, input limits, error hygiene, query logging.
 SQLite + fake Redis + mocked LLMs (fixtures from test_approval_api).
 Run: pytest tests/test_security.py -v
 """
+import re
+
 import pytest
 
 from backend import config
@@ -190,3 +192,34 @@ class TestPasswordHashing:
             get_password_hash("x" * 73)
         assert not verify_password("x" * 73, "$2b$12$abc")
         assert not verify_password("pw", "not-a-hash")
+
+
+
+class TestVersioning:
+    def test_prompt_change_changes_fingerprint(self, monkeypatch):
+        from backend import versioning
+        from backend.agents import analysis
+        before = versioning.pipeline_fingerprint()
+        monkeypatch.setattr(analysis, "SYSTEM_PROMPT", analysis.SYSTEM_PROMPT + " ")
+        assert versioning.pipeline_fingerprint() != before
+
+    def test_corpus_fingerprint_cached_and_resettable(self, monkeypatch):
+        from backend import versioning
+        from backend.rag.hybrid_search import hybrid_rag
+        versioning.reset_corpus_fingerprint()
+        first = versioning.corpus_fingerprint()
+        monkeypatch.setattr(hybrid_rag.collection, "get", lambda **kw: {"ids": ["changed"]})
+        assert versioning.corpus_fingerprint() == first          # cached within TTL
+        versioning.reset_corpus_fingerprint()
+        assert versioning.corpus_fingerprint() != first          # recomputed
+        versioning.reset_corpus_fingerprint()
+
+    def test_cache_version_format(self):
+        from backend.versioning import cache_version
+        assert re.match(r"^p[0-9a-f]{12}-c([0-9a-f]{12}|unknown)$", cache_version())
+
+    @pytest.mark.parametrize("jur", ["UP", "IN-up", "IN-UPP", "US"])
+    def test_invalid_jurisdiction_rejected(self, client, jur):
+        r = client.post("/api/query", json={"query": "q", "jurisdiction": jur},
+                        headers=client.headers_for("associate"))
+        assert r.status_code == 422
