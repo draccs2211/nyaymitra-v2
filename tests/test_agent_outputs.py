@@ -134,3 +134,66 @@ class TestAnalysisOutput:
         assert out["case_analysis"]["error"] == "api down"
         assert out["case_strength"] == "medium"
         schemas.AnalysisOutput(**out)
+
+
+# ─── Drafting / Referral / Verification ──────────────────────────────────────
+
+class TestDraftingOutput:
+    @pytest.mark.parametrize("query,lang,expected", [
+        ("Draft legal notice to landlord", "en", "legal_notice"),
+        ("RTI application for scheme status", "en", "rti_application"),
+        ("मकान मालिक को कानूनी नोटिस", "hi", "legal_notice"),
+    ])
+    def test_validates(self, query, lang, expected):
+        from backend.agents.drafting import drafting_agent
+        out = drafting_agent(make_state(user_query=query, language=lang))
+        assert out["document_type"] == expected
+        expected_draft = out["document_hindi"] if lang == "hi" else out["document_english"]
+        assert out["draft_document"] == expected_draft
+        schemas.DraftingOutput(**out)
+
+
+class TestReferralOutput:
+    def test_appends_and_validates(self):
+        from backend.agents.referral import referral_agent
+        out = referral_agent(make_state(final_response="Prior analysis"))
+        assert out["final_response"].startswith("Prior analysis")
+        assert out["dlsa_offices"][0]["helpline"] == "15100"
+        schemas.ReferralOutput(**out)
+
+
+class TestVerificationOutput:
+    def test_validates(self):
+        from backend.agents.verification import verification_agent
+        out = verification_agent(make_state(final_response="x" * 400))
+        assert 0.0 <= out["confidence_score"] <= 1.0
+        schemas.VerificationOutput(**out)
+
+
+# ─── End-to-end (all external calls mocked) ──────────────────────────────────
+
+class TestPipelineWithSchemas:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("needs_document", [False, True])
+    async def test_full_graph(self, monkeypatch, needs_document):
+        from backend.agents import orchestrator, analysis, research
+        from backend.pipeline import run_pipeline
+
+        monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
+            "legal_domain": "property", "needs_document": needs_document,
+            "needs_referral": True, "language": "en", "urgency": "low",
+            "query_type": "research", "key_issues": ["deposit"],
+        })))
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai("Analysis text " * 30))
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
+            {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
+        ])
+
+        result = await run_pipeline("landlord kept deposit", "s1", "u1")
+        assert result["legal_domain"] == "property"
+        assert result["research_results"][0]["id"] == "act:1"
+        assert result["dlsa_offices"]                       # referral ran
+        assert "Disclaimer" in result["final_response"]     # verification ran
+        assert bool(result["draft_document"]) is needs_document
+        if needs_document:
+            assert result["human_approval_needed"] is True

@@ -4,9 +4,8 @@ Generates legal documents using templates.
 Upgrade planned: OpenAI-based intelligent drafting after testing.
 """
 from backend.state import NyayMitraState
+from backend.agents.schemas import DraftingOutput, to_state
 from langsmith import traceable
-import json
-import re
 from datetime import datetime
 
 
@@ -371,12 +370,12 @@ def drafting_agent(state: NyayMitraState) -> dict:
 
     print(f"[Drafting] Document type: {doc_type} | Language: {language}")
 
-    return {
-        "draft_document": draft,
-        "document_type": doc_type,
-        "document_hindi": doc_hindi,
-        "document_english": doc_english,
-    }
+    return to_state(DraftingOutput(
+        draft_document=draft,
+        document_type=doc_type,
+        document_hindi=doc_hindi,
+        document_english=doc_english,
+    ))
 
 
 # ── Test ─────────────────────────────────────────────────────────────────────

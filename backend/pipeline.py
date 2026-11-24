@@ -7,6 +7,7 @@ from backend.agents.drafting import drafting_agent
 from backend.agents.analysis import analysis_agent
 from backend.agents.verification import verification_agent
 from backend.agents.referral import referral_agent
+from backend.agents.schemas import HumanApprovalOutput, to_state
 from typing import Literal
 
 
@@ -47,7 +48,7 @@ def human_approval_node(state: NyayMitraState) -> dict:
     # For now, we pass through with a note
     response = state.get("final_response", "")
     note = "\n\n🔍 [This response has been flagged for review due to lower confidence. Please verify before use.]"
-    return {"final_response": response + note}
+    return to_state(HumanApprovalOutput(final_response=response + note))
 
 
 def build_graph():

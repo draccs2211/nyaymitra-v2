@@ -4,6 +4,7 @@ Checks confidence, detects hallucinations, adds disclaimers and sources.
 """
 from backend.state import NyayMitraState
 from backend.config import CONFIDENCE_THRESHOLD
+from backend.agents.schemas import VerificationOutput, to_state
 from langsmith import traceable
 from typing import List, Dict
 import re
@@ -124,13 +125,13 @@ def verification_agent(state: NyayMitraState) -> dict:
 
     print(f"[Verification] Confidence: {confidence} | Hallucination: {hallucination_detected} | Human approval: {human_approval_needed}")
 
-    return {
-        "confidence_score": confidence,
-        "hallucination_detected": hallucination_detected,
-        "human_approval_needed": human_approval_needed,
-        "verified_sources": sources,
-        "final_response": enhanced_response,
-    }
+    return to_state(VerificationOutput(
+        confidence_score=confidence,
+        hallucination_detected=hallucination_detected,
+        human_approval_needed=human_approval_needed,
+        verified_sources=sources,
+        final_response=enhanced_response,
+    ))
 
 
 # ── Test ─────────────────────────────────────────────────────────────────────

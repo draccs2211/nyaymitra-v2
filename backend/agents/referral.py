@@ -1,4 +1,5 @@
 from backend.state import NyayMitraState
+from backend.agents.schemas import DlsaOffice, ReferralOutput, to_state
 from langsmith import traceable
 
 
@@ -88,8 +89,8 @@ Timing: {dlsa['timing']}
     current_response = state.get("final_response", "")
     final_response = current_response + "\n\n" + referral_text if current_response else referral_text
 
-    return {
-        "dlsa_offices": dlsa_offices,
-        "lawyer_referrals": [],
-        "final_response": final_response,
-    }
+    return to_state(ReferralOutput(
+        dlsa_offices=[DlsaOffice(**o) for o in dlsa_offices],
+        lawyer_referrals=[],
+        final_response=final_response,
+    ))
