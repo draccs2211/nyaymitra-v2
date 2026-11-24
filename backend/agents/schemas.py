@@ -7,7 +7,7 @@ are dropped, so an agent only writes the state keys it actually sets.
 """
 from typing import Any, Dict, List, Literal, Optional, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.config import LEGAL_DOMAINS
 
@@ -19,6 +19,7 @@ Urgency = Literal["critical", "high", "medium", "low"]
 RequestedAction = Literal["research", "drafting", "referral"]
 # "urgent" is set by guardian; weak/medium/strong by analysis (to be replaced per CLAUDE.md rules)
 CaseStrength = Literal["weak", "medium", "strong", "urgent"]
+ApprovalStatus = Literal["not_required", "pending", "approved", "rejected"]
 DocumentType = Literal[
     "legal_notice", "rti_application", "consumer_complaint",
     "police_complaint", "vakalatnama",
@@ -205,11 +206,37 @@ class VerificationOutput(_Base):
     confidence_score: float = Field(ge=0.0, le=1.0)
     hallucination_detected: bool
     human_approval_needed: bool
+    approval_status: Literal["not_required", "pending"]
     verified_sources: List[str] = Field(default_factory=list)
     final_response: str
 
 
 # ─── Human approval ───────────────────────────────────────────────────────────
 
+class ApprovalDecision(_Base):
+    """Reviewer input used to resume an interrupted run."""
+    decision: Literal["approved", "rejected"]
+    reviewer_id: str = Field(min_length=1)
+    notes: str = ""
+    edited_response: Optional[str] = None   # approved only: reviewer's corrected text
+
+    @model_validator(mode="after")
+    def _edit_only_on_approve(self):
+        if self.edited_response is not None and self.decision != "approved":
+            raise ValueError("edited_response is only allowed when approving")
+        if self.decision == "rejected" and not self.notes.strip():
+            raise ValueError("notes are required when rejecting")
+        return self
+
+
+class ApprovalRecord(_Base):
+    reviewer_id: str
+    notes: str = ""
+    decided_at: str              # ISO-8601 UTC
+    edited: bool = False
+
+
 class HumanApprovalOutput(_Base):
-    final_response: str
+    approval_status: Literal["approved", "rejected"]
+    approval: ApprovalRecord
+    final_response: Optional[str] = None    # set only when reviewer edited

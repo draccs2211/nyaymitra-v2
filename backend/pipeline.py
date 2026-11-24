@@ -7,8 +7,15 @@ from backend.agents.drafting import drafting_agent
 from backend.agents.analysis import analysis_agent
 from backend.agents.verification import verification_agent
 from backend.agents.referral import referral_agent
-from backend.agents.schemas import HumanApprovalOutput, to_state
-from typing import Literal
+from backend.agents.schemas import (
+    ApprovalDecision, ApprovalRecord, HumanApprovalOutput, to_state
+)
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command, interrupt
+from datetime import datetime, timezone
+from typing import Literal, Optional
+import asyncio
+import uuid
 
 
 def check_emergency(state: NyayMitraState) -> Literal["emergency", "normal"]:
@@ -50,14 +57,43 @@ def route_after_verification(state: NyayMitraState) -> Literal["end", "human_app
 
 
 def human_approval_node(state: NyayMitraState) -> dict:
-    # In production this would pause and wait for human input
-    # For now, we pass through with a note
-    response = state.get("final_response", "")
-    note = "\n\n🔍 [This response has been flagged for review due to lower confidence. Please verify before use.]"
-    return to_state(HumanApprovalOutput(final_response=response + note))
+    """
+    Pause the run until a reviewer decides (LangGraph interrupt).
+    Everything before interrupt() re-runs on resume, so keep it side-effect free.
+    """
+    raw = interrupt({
+        "type": "approval_request",
+        "final_response": state.get("final_response", ""),
+        "draft_document": state.get("draft_document", ""),
+        "document_type": state.get("document_type", ""),
+        "confidence_score": state.get("confidence_score", 0.0),
+        "hallucination_detected": state.get("hallucination_detected", False),
+        "verified_sources": state.get("verified_sources", []),
+    })
+    decision = ApprovalDecision.model_validate(raw)
+    edited = decision.edited_response is not None
+    return to_state(HumanApprovalOutput(
+        approval_status=decision.decision,
+        approval=ApprovalRecord(
+            reviewer_id=decision.reviewer_id,
+            notes=decision.notes,
+            decided_at=datetime.now(timezone.utc).isoformat(),
+            edited=edited,
+        ),
+        final_response=decision.edited_response if edited else None,
+    ))
 
 
-def build_graph():
+def get_checkpointer():
+    """
+    Checkpointer holding paused runs between interrupt and approval.
+    In-memory: paused runs are lost on restart and not shared across workers.
+    Swap for a Postgres saver (langgraph-checkpoint-postgres) for production.
+    """
+    return InMemorySaver()
+
+
+def build_graph(checkpointer=None):
     workflow = StateGraph(NyayMitraState)
 
     # Add all nodes
@@ -133,25 +169,69 @@ def build_graph():
     # Human approval → end
     workflow.add_edge("human_approval", END)
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)
 
 
 # Compile the graph
-nyaymitra_graph = build_graph()
+nyaymitra_graph = build_graph(checkpointer=get_checkpointer())
+
+
+def _config(run_id: str) -> dict:
+    return {"configurable": {"thread_id": run_id}}
+
+
+async def _snapshot_result(run_id: str) -> dict:
+    snap = await asyncio.to_thread(nyaymitra_graph.get_state, _config(run_id))
+    result = dict(snap.values)
+    result["run_id"] = run_id
+    if "human_approval" in (snap.next or ()):
+        result["approval_status"] = "pending"
+    return result
 
 
 async def run_pipeline(
     query: str,
     session_id: str,
     user_id: str,
-    conversation_history: list = None
+    conversation_history: list = None,
+    run_id: Optional[str] = None,
 ) -> dict:
+    """Run the graph. If approval is needed, returns with approval_status='pending'."""
+    run_id = run_id or str(uuid.uuid4())
     state = initial_state(
         user_query=query,
         session_id=session_id,
         user_id=user_id,
         conversation_history=conversation_history or [],
     )
+    # Sync invoke in a worker thread: agents are sync (would block the event
+    # loop) and interrupt() needs contextvars that ainvoke loses on Python 3.10
+    await asyncio.to_thread(nyaymitra_graph.invoke, state, _config(run_id))
+    return await _snapshot_result(run_id)
 
-    result = await nyaymitra_graph.ainvoke(state)
-    return result
+
+async def get_run(run_id: str) -> Optional[dict]:
+    """Current state of a run, or None if unknown."""
+    snap = await asyncio.to_thread(nyaymitra_graph.get_state, _config(run_id))
+    if not snap.values:
+        return None
+    return await _snapshot_result(run_id)
+
+
+async def resume_pipeline(run_id: str, decision: dict) -> dict:
+    """
+    Resume a paused run with a reviewer decision.
+    Raises KeyError if run is unknown, ValueError if it isn't awaiting approval
+    or the decision is invalid (validated before resuming, so a bad decision
+    doesn't consume the interrupt).
+    """
+    current = await get_run(run_id)
+    if current is None:
+        raise KeyError(run_id)
+    if current.get("approval_status") != "pending":
+        raise ValueError(f"run is not awaiting approval (status: {current.get('approval_status')})")
+    validated = ApprovalDecision.model_validate(decision)
+    await asyncio.to_thread(
+        nyaymitra_graph.invoke, Command(resume=validated.model_dump()), _config(run_id)
+    )
+    return await _snapshot_result(run_id)

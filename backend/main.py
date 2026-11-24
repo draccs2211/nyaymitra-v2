@@ -21,7 +21,8 @@ from backend.utils.cache import (
     store_session, get_session
 )
 from backend.utils.language_detector import detect_language
-from backend.pipeline import run_pipeline
+from backend.pipeline import run_pipeline, resume_pipeline, get_run
+from pydantic import ValidationError
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -67,7 +68,15 @@ class QueryResponse(BaseModel):
     document_english: Optional[str] = None
     is_emergency: bool
     human_approval_needed: bool
+    run_id: Optional[str] = None
+    approval_status: str = "not_required"   # not_required / pending / approved / rejected
     response_time_ms: int
+
+class ApprovalRequest(BaseModel):
+    decision: str                       # approved / rejected
+    notes: str = ""
+    edited_response: Optional[str] = None
+
 
 class CreateCaseRequest(BaseModel):
     title: str
@@ -79,6 +88,38 @@ class TokenResponse(BaseModel):
     token_type: str
     user_name: str
     user_role: str
+
+
+def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryResponse:
+    return QueryResponse(
+        session_id=session_id,
+        response=result.get("final_response", "No response generated"),
+        confidence_score=result.get("confidence_score", 0.5),
+        legal_domain=result.get("legal_domain", "general"),
+        case_strength=result.get("case_strength", "medium"),
+        sources=result.get("verified_sources", []),
+        next_steps=result.get("next_steps", []),
+        has_document=bool(result.get("draft_document")),
+        document_hindi=result.get("document_hindi"),
+        document_english=result.get("document_english"),
+        is_emergency=result.get("is_emergency", False),
+        human_approval_needed=result.get("human_approval_needed", False),
+        run_id=result.get("run_id"),
+        approval_status=result.get("approval_status", "not_required"),
+        response_time_ms=response_time_ms,
+    )
+
+
+def can_review(reviewer: User, requester: User) -> bool:
+    """
+    Who may approve/reject a run:
+    - solo user (no firm): only themselves
+    - firm member's run: an admin or senior of the SAME firm (associates can't
+      approve their own output)
+    """
+    if requester.firm_id is None:
+        return reviewer.id == requester.id
+    return reviewer.firm_id == requester.firm_id and reviewer.role in ("admin", "senior")
 
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
@@ -208,22 +249,7 @@ async def process_query(
     # Check query cache
     cached = get_cached_query(request.query, scope=current_user.id, language=language)
     if cached and not request.session_id:
-        response_time = int((time.time() - start_time) * 1000)
-        return QueryResponse(
-            session_id=session_id,
-            response=cached.get("final_response", ""),
-            confidence_score=cached.get("confidence_score", 0.7),
-            legal_domain=cached.get("legal_domain", "general"),
-            case_strength=cached.get("case_strength", "medium"),
-            sources=cached.get("verified_sources", []),
-            next_steps=cached.get("next_steps", []),
-            has_document=bool(cached.get("draft_document")),
-            document_hindi=cached.get("document_hindi"),
-            document_english=cached.get("document_english"),
-            is_emergency=cached.get("is_emergency", False),
-            human_approval_needed=cached.get("human_approval_needed", False),
-            response_time_ms=response_time
-        )
+        return _to_response(cached, session_id, int((time.time() - start_time) * 1000))
 
     # Run pipeline
     try:
@@ -243,8 +269,9 @@ async def process_query(
     conversation_history.append({"role": "assistant", "content": result.get("final_response", "")})
     store_session(session_id, {"history": conversation_history[-20:]}, user_id=current_user.id)  # Keep last 20 turns
 
-    # Cache non-emergency responses
-    if not result.get("is_emergency") and not request.session_id:
+    # Cache only final, non-emergency responses — never ones awaiting review
+    if (not result.get("is_emergency") and not request.session_id
+            and result.get("approval_status") == "not_required"):
         set_cached_query(request.query, result, scope=current_user.id, language=language)
 
     # Log query in background
@@ -253,21 +280,61 @@ async def process_query(
         request.query, language, result, response_time
     )
 
-    return QueryResponse(
-        session_id=session_id,
-        response=result.get("final_response", "No response generated"),
-        confidence_score=result.get("confidence_score", 0.5),
-        legal_domain=result.get("legal_domain", "general"),
-        case_strength=result.get("case_strength", "medium"),
-        sources=result.get("verified_sources", []),
-        next_steps=result.get("next_steps", []),
-        has_document=bool(result.get("draft_document")),
-        document_hindi=result.get("document_hindi"),
-        document_english=result.get("document_english"),
-        is_emergency=result.get("is_emergency", False),
-        human_approval_needed=result.get("human_approval_needed", False),
-        response_time_ms=response_time
+    return _to_response(result, session_id, response_time)
+
+
+# ─── Approval Routes ──────────────────────────────────────────────────────────
+
+async def _load_run_for(run_id: str, current_user: User, db: Session, *, review: bool):
+    run = await get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    requester = db.query(User).filter(User.id == run.get("user_id")).first()
+    if requester is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    allowed = can_review(current_user, requester) or (
+        not review and current_user.id == requester.id
     )
+    if not allowed:
+        # 404, not 403: don't reveal that the run exists
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
+
+
+@app.get("/api/approvals/{run_id}", response_model=QueryResponse)
+async def get_approval(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """View a run's response and approval status (requester or eligible reviewer)."""
+    run = await _load_run_for(run_id, current_user, db, review=False)
+    return _to_response(run, run.get("session_id", ""), 0)
+
+
+@app.post("/api/approvals/{run_id}", response_model=QueryResponse)
+async def decide_approval(
+    run_id: str,
+    request: ApprovalRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Approve or reject a pending run (eligible reviewer only)."""
+    run = await _load_run_for(run_id, current_user, db, review=True)
+    if run.get("approval_status") != "pending":
+        raise HTTPException(status_code=409, detail=f"Run is {run.get('approval_status')}, not pending")
+    try:
+        result = await resume_pipeline(run_id, {
+            "decision": request.decision,
+            "reviewer_id": current_user.id,      # from token, never from body
+            "notes": request.notes,
+            "edited_response": request.edited_response,
+        })
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return _to_response(result, result.get("session_id", ""), 0)
 
 
 def log_query(db, user_id, case_id, query, language, result, response_time):

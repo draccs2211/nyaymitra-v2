@@ -41,6 +41,10 @@ class NyayMitraState(TypedDict):
     human_approval_needed: bool
     verified_sources: List[str]
 
+    # Human approval (LangGraph interrupt)
+    approval_status: str             # not_required / pending / approved / rejected
+    approval: Dict[str, Any]         # reviewer_id, notes, decided_at, edited
+
     # Referral
     dlsa_offices: List[Dict[str, Any]]
     lawyer_referrals: List[Dict[str, Any]]
@@ -82,6 +86,8 @@ def initial_state(**overrides) -> NyayMitraState:
         "hallucination_detected": False,
         "human_approval_needed": False,
         "verified_sources": [],
+        "approval_status": "not_required",
+        "approval": {},
         "dlsa_offices": [],
         "lawyer_referrals": [],
         "final_response": "",

@@ -129,6 +129,7 @@ def verification_agent(state: NyayMitraState) -> dict:
         confidence_score=confidence,
         hallucination_detected=hallucination_detected,
         human_approval_needed=human_approval_needed,
+        approval_status="pending" if human_approval_needed else "not_required",
         verified_sources=sources,
         final_response=enhanced_response,
     ))
