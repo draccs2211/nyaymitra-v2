@@ -47,3 +47,7 @@ LEGAL_DOMAINS = [
     "criminal", "civil", "family", "property",
     "consumer", "rti", "labor", "constitutional", "general"
 ]
+
+# MCP clients (timeout per attempt, retries after the first attempt)
+MCP_TIMEOUT_SECONDS = float(os.getenv("MCP_TIMEOUT_SECONDS", "8"))
+MCP_RETRIES = int(os.getenv("MCP_RETRIES", "1"))

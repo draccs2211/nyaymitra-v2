@@ -173,10 +173,14 @@ class KanoonCase(_Base):
         return "" if v is None else str(v)
 
 
+SourceStatus = Literal["ok", "not_configured", "unavailable", "error", "skipped"]
+
+
 class ResearchOutput(_Base):
     research_results: List[RetrievedDoc] = Field(default_factory=list)
     kanoon_cases: List[KanoonCase] = Field(default_factory=list)
     ipc_sections: List[RetrievedDoc] = Field(default_factory=list)
+    source_status: Dict[str, SourceStatus] = Field(default_factory=dict)
 
 
 # ─── Analysis ─────────────────────────────────────────────────────────────────

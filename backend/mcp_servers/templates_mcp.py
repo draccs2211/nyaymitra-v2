@@ -1,11 +1,8 @@
 from fastmcp import FastMCP
-from backend.database.connection import get_redis
 from datetime import datetime
 import json
-import hashlib
 
 mcp = FastMCP("Document Templates MCP Server")
-redis_client = get_redis()
 
 TEMPLATES = {
     "legal_notice": {
@@ -252,10 +249,6 @@ Client Signature: ________________
 Date: {date}"""
     }
 }
-
-
-def get_cache_key(prefix: str, data: str) -> str:
-    return f"{prefix}:{hashlib.md5(data.encode()).hexdigest()}"
 
 
 @mcp.tool()

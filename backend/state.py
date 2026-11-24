@@ -27,6 +27,7 @@ class NyayMitraState(TypedDict):
     research_results: List[Dict[str, Any]]
     kanoon_cases: List[Dict[str, Any]]
     ipc_sections: List[Dict[str, Any]]
+    source_status: Dict[str, str]    # per external source: ok / not_configured / unavailable / error / skipped
 
     # Analysis (set by analysis agent)
     case_analysis: Dict[str, Any]
@@ -85,6 +86,7 @@ def initial_state(**overrides) -> NyayMitraState:
         "research_results": [],
         "kanoon_cases": [],
         "ipc_sections": [],
+        "source_status": {},
         "case_analysis": {},
         "case_strength": "medium",
         "draft_document": "",

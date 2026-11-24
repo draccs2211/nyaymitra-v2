@@ -37,3 +37,7 @@ def _block_paid_apis(request, monkeypatch):
     rag = sys.modules.get("backend.rag.hybrid_search")   # only if already loaded (slow import)
     if rag is not None:
         monkeypatch.setattr(rag.hybrid_rag, "cohere_client", None)
+    # Indian Kanoon is a paid API: behave as "not configured" unless a test opts in
+    monkeypatch.setattr(
+        importlib.import_module("backend.mcp_servers.indiankanoon_mcp"), "INDIAN_KANOON_API_KEY", ""
+    )

@@ -1,10 +1,7 @@
 from fastmcp import FastMCP
-from backend.database.connection import get_redis
-import json
-import hashlib
+from backend.utils.cache import cache_get_json, cache_set_json, make_key
 
 mcp = FastMCP("Legal Reference MCP Server")
-redis_client = get_redis()
 
 # IPC to BNS mapping (key sections)
 IPC_TO_BNS = {
@@ -106,10 +103,6 @@ LEGAL_PROVISIONS = {
 }
 
 
-def get_cache_key(prefix: str, data: str) -> str:
-    return f"{prefix}:{hashlib.md5(data.encode()).hexdigest()}"
-
-
 @mcp.tool()
 async def get_ipc_section(section_number: str) -> dict:
     """
@@ -118,12 +111,13 @@ async def get_ipc_section(section_number: str) -> dict:
     Args:
         section_number: IPC section number e.g. "302", "420", "498A"
     """
-    cache_key = get_cache_key("ipc", section_number)
-    cached = redis_client.get(cache_key)
+    section_number = section_number.strip().upper()
+    cache_key = make_key("ipc", section_number)
+    cached = cache_get_json(cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
-    section = IPC_TO_BNS.get(section_number.strip())
+    section = IPC_TO_BNS.get(section_number)
     if section:
         result = {
             "status": "found",
@@ -142,7 +136,7 @@ async def get_ipc_section(section_number: str) -> dict:
             "official_source": "https://www.indiacode.nic.in"
         }
 
-    redis_client.setex(cache_key, 604800, json.dumps(result))
+    cache_set_json(cache_key, result, 604800)
     return result
 
 
@@ -154,10 +148,10 @@ async def get_legal_provision(topic: str) -> dict:
     Args:
         topic: Legal topic e.g. "fir", "consumer", "rti", "tenant", "bail", "domestic_violence"
     """
-    cache_key = get_cache_key("provision", topic)
-    cached = redis_client.get(cache_key)
+    cache_key = make_key("provision", topic)
+    cached = cache_get_json(cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     # Try to match topic
     topic_lower = topic.lower()
@@ -185,7 +179,7 @@ async def get_legal_provision(topic: str) -> dict:
             "suggestion": "Please check India Code: https://www.indiacode.nic.in or contact DLSA: 15100"
         }
 
-    redis_client.setex(cache_key, 604800, json.dumps(result))
+    cache_set_json(cache_key, result, 604800)
     return result
 
 

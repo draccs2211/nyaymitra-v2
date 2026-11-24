@@ -1,9 +1,7 @@
 from fastmcp import FastMCP
-from backend.database.connection import get_redis
 import json
 
 mcp = FastMCP("DLSA MCP Server")
-redis_client = get_redis()
 
 DLSA_DATA = {
     "lucknow": {

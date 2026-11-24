@@ -42,6 +42,12 @@ def analysis_agent(state: NyayMitraState) -> dict:
         for result in research_results[:3]:
             context_parts.append(f"- {result.get('content', '')[:200]}")
 
+    mcp_sections = [s for s in state.get("ipc_sections", []) if s.get("source") == "mcp"]
+    if mcp_sections:
+        context_parts.append("\nIPC -> BNS references (quick reference, verify official text):")
+        for s in mcp_sections[:5]:
+            context_parts.append(f"- {s.get('content', '')[:250]}")
+
     context = "\n".join(context_parts) if context_parts else "No specific cases found — providing general legal guidance."
 
     classification = state.get("classification") or {}

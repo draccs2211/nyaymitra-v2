@@ -108,6 +108,14 @@ def verification_agent(state: NyayMitraState) -> dict:
 
     # Build sources
     sources = build_sources_list(kanoon_cases, research_results)
+    kanoon_status = (state.get("source_status") or {}).get("indian_kanoon")
+    if kanoon_status and kanoon_status != "ok":
+        reason = {
+            "not_configured": "not configured",
+            "unavailable": "temporarily unavailable",
+            "error": "returned an error",
+        }.get(kanoon_status, kanoon_status)
+        sources.append(f"Case-law search (Indian Kanoon) {reason} — no case law was searched for this answer")
 
     # Add disclaimer
     disclaimer_hi = "\n\n⚠️ अस्वीकरण: यह जानकारी सामान्य कानूनी मार्गदर्शन के लिए है। न्यायालय में उद्धृत करने से पहले आधिकारिक स्रोतों से सत्यापित करें।"

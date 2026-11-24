@@ -187,7 +187,9 @@ class TestResearchOutput:
         assert out["research_results"][1]["metadata"] == {}
         assert "rrf_score" not in out["research_results"][1]   # None dropped
         assert out["kanoon_cases"] == []
-        assert [s["id"] for s in out["ipc_sections"]] == ["act:abc"]
+        # statutory refs come from doc_type metadata (none here), not a text match on "section"
+        assert out["ipc_sections"] == []
+        assert out["source_status"]["indian_kanoon"] == "not_configured"
         schemas.ResearchOutput(**out)
 
     def test_kanoon_case_coerces_ids(self):

@@ -1,16 +1,9 @@
 from fastmcp import FastMCP
 from backend.config import INDIAN_KANOON_API_KEY, INDIAN_KANOON_BASE_URL, KANOON_CACHE_TTL
-from backend.database.connection import get_redis
+from backend.utils.cache import cache_get_json, cache_set_json, make_key
 import httpx
-import json
-import hashlib
 
 mcp = FastMCP("IndianKanoon MCP Server")
-redis_client = get_redis()
-
-
-def get_cache_key(prefix: str, data: str) -> str:
-    return f"{prefix}:{hashlib.md5(data.encode()).hexdigest()}"
 
 
 @mcp.tool()
@@ -32,16 +25,16 @@ async def search_case_laws(
         year_to: Optional end year filter
         max_results: Number of results to return (max 10)
     """
-    cache_key = get_cache_key("kanoon_search", f"{query}{court}{year_from}{year_to}")
+    cache_key = make_key("kanoon_search", query, court, year_from, year_to, max_results)
 
-    # Check cache
-    cached = redis_client.get(cache_key)
+    cached = cache_get_json(cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     if not INDIAN_KANOON_API_KEY:
         return {
             "status": "error",
+            "code": "not_configured",
             "message": "Indian Kanoon API key not configured",
             "results": [],
             "disclaimer": "Configure INDIAN_KANOON_API_KEY in .env file"
@@ -90,12 +83,12 @@ async def search_case_laws(
                     "disclaimer": "⚠️ Indian Kanoon is for discovery only. Verify from official court websites before citing in court."
                 }
 
-                # Cache result
-                redis_client.setex(cache_key, KANOON_CACHE_TTL, json.dumps(output))
+                cache_set_json(cache_key, output, KANOON_CACHE_TTL)
                 return output
 
             return {
                 "status": "error",
+                "code": "upstream_error",
                 "message": f"API returned {response.status_code}",
                 "results": []
             }
@@ -103,6 +96,7 @@ async def search_case_laws(
     except Exception as e:
         return {
             "status": "error",
+            "code": "upstream_error",
             "message": str(e),
             "results": [],
             "disclaimer": "Failed to fetch from Indian Kanoon. Please try Indian Kanoon website directly."
@@ -117,14 +111,14 @@ async def get_case_details(tid: str) -> dict:
     Args:
         tid: The document ID from Indian Kanoon
     """
-    cache_key = get_cache_key("kanoon_case", tid)
+    cache_key = make_key("kanoon_case", tid)
 
-    cached = redis_client.get(cache_key)
+    cached = cache_get_json(cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     if not INDIAN_KANOON_API_KEY:
-        return {"status": "error", "message": "API key not configured"}
+        return {"status": "error", "code": "not_configured", "message": "API key not configured"}
 
     try:
         headers = {"Authorization": f"Token {INDIAN_KANOON_API_KEY}"}
@@ -146,7 +140,7 @@ async def get_case_details(tid: str) -> dict:
                     "url": f"https://indiankanoon.org/doc/{tid}/",
                     "disclaimer": "⚠️ Verify from official source before citing in court."
                 }
-                redis_client.setex(cache_key, KANOON_CACHE_TTL * 7, json.dumps(output))
+                cache_set_json(cache_key, output, KANOON_CACHE_TTL * 7)
                 return output
 
             return {"status": "error", "message": f"Case not found: {tid}"}
@@ -163,10 +157,10 @@ async def check_case_validity(citation: str) -> dict:
     Args:
         citation: Case citation string e.g. "AIR 2020 SC 123"
     """
-    cache_key = get_cache_key("kanoon_validity", citation)
-    cached = redis_client.get(cache_key)
+    cache_key = make_key("kanoon_validity", citation)
+    cached = cache_get_json(cache_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     try:
         search_result = await search_case_laws(
@@ -195,7 +189,7 @@ async def check_case_validity(citation: str) -> dict:
                 "disclaimer": "Please verify directly on official court websites."
             }
 
-        redis_client.setex(cache_key, KANOON_CACHE_TTL, json.dumps(output))
+        cache_set_json(cache_key, output, KANOON_CACHE_TTL)
         return output
 
     except Exception as e:
