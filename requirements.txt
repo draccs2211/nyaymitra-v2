@@ -33,7 +33,7 @@ sqlalchemy
 tiktoken
 requests
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 # Testing
 pytest
 pytest-asyncio

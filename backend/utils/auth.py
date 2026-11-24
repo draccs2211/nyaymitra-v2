@@ -1,24 +1,39 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from backend.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.config import ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, require_secret_key
 from backend.database.connection import get_db
 from backend.database.models import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = require_secret_key()   # raises at startup if missing/weak
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
+# bcrypt directly (passlib 1.7.4 is unmaintained and breaks with bcrypt>=4.1).
+# Hashes are standard $2b$ strings, compatible with ones passlib produced.
+_BCRYPT_MAX_BYTES = 72
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    pw = plain_password.encode("utf-8")
+    if len(pw) > _BCRYPT_MAX_BYTES or not hashed_password:
+        return False
+    try:
+        return bcrypt.checkpw(pw, hashed_password.encode("utf-8"))
+    except ValueError:      # malformed stored hash
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    pw = password.encode("utf-8")
+    if len(pw) > _BCRYPT_MAX_BYTES:
+        raise ValueError("password longer than 72 bytes")
+    return bcrypt.hashpw(pw, bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
