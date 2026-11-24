@@ -11,8 +11,8 @@ from backend.config import (
     EMBEDDING_MODEL, CHROMA_PERSIST_DIR,
     TOP_K_RESULTS, RERANK_TOP_K, COHERE_API_KEY
 )
+from backend.rag.metadata import DocMetadata
 import cohere
-import json
 import pickle
 import os
 
@@ -315,8 +315,20 @@ class HybridRAG:
             seen.add(canonical_id)
             ids.append(canonical_id)
             texts.append(doc["content"])
-            metadatas.append(doc.get("metadata") or {})
+            # Validate against canonical schema — raises on bad corpus data
+            metadatas.append(DocMetadata.model_validate(doc.get("metadata") or {}).to_chroma())
             embeddings.append(self.get_embedding(doc["content"]))
+
+        # Chroma upsert MERGES metadata, so keys removed from the schema would
+        # linger. Delete docs whose stored keys aren't a subset of the new ones.
+        existing = self.collection.get(ids=ids, include=["metadatas"])
+        new_keys = {i: set(m) for i, m in zip(ids, metadatas)}
+        stale = [
+            i for i, m in zip(existing["ids"], existing["metadatas"] or [])
+            if set(m or {}) - new_keys[i]
+        ]
+        if stale:
+            self.collection.delete(ids=stale)
 
         # Upsert: re-running with same IDs updates instead of duplicating
         self.collection.upsert(
