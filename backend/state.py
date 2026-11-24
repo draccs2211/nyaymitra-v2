@@ -32,7 +32,7 @@ class NyayMitraState(TypedDict):
 
     # Analysis (set by analysis agent)
     case_analysis: Dict[str, Any]
-    case_strength: str               # weak, medium, strong
+    analysis_unverified_citations: List[str]  # provisions in analysis not in research context
 
     # Document
     draft_document: str
@@ -90,7 +90,7 @@ def initial_state(**overrides) -> NyayMitraState:
         "ipc_sections": [],
         "source_status": {},
         "case_analysis": {},
-        "case_strength": "medium",
+        "analysis_unverified_citations": [],
         "draft_document": "",
         "document_type": "",
         "document_hindi": "",

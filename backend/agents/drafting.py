@@ -9,11 +9,11 @@ Falls back to deterministic template filling if the LLM fails.
 from backend.state import NyayMitraState, initial_state
 from backend.config import OPENAI_API_KEY
 from backend.agents.schemas import DraftFields, DraftingOutput, DraftLLMOutput, to_state
+from backend.utils.citations import cited_numbers, find_unverified_citations, research_context  # noqa: F401
 from langsmith import traceable
 from openai import OpenAI
 from datetime import datetime
 import json
-import re
 
 
 DOCUMENT_TEMPLATES = {
@@ -374,12 +374,6 @@ Rules:
 - Use today's date given below.
 Return ONLY JSON."""
 
-_CITE_RE = re.compile(
-    r"(?:section|sec\.|s\.|धारा|article|अनुच्छेद)\s*(\d+[A-Z]?)(?:\(\d+\))?",
-    re.IGNORECASE,
-)
-
-
 def _today() -> str:
     return datetime.now().strftime("%d/%m/%Y")
 
@@ -391,22 +385,8 @@ def fill_template(template: str, values: dict) -> str:
     return result
 
 
-def cited_numbers(text: str) -> set:
-    return {m.upper() for m in _CITE_RE.findall(text or "")}
-
-
-def find_unverified_citations(draft_texts: list, allowed_context: str) -> list:
-    """Provision numbers cited in the draft that never appear in the allowed context."""
-    allowed = cited_numbers(allowed_context)
-    cited = set()
-    for t in draft_texts:
-        cited |= cited_numbers(t)
-    return sorted(cited - allowed)
-
-
 def _allowed_context(state: NyayMitraState, doc_type: str) -> str:
-    parts = [r.get("content", "") for r in state.get("research_results", [])]
-    parts += [r.get("content", "") for r in state.get("ipc_sections", [])]
+    parts = [research_context(state)]
     tmpl = DOCUMENT_TEMPLATES.get(doc_type)
     if tmpl:  # curated templates may cite their own enabling provision (e.g. RTI s.6(1))
         parts += [tmpl["english"], tmpl["hindi"]]

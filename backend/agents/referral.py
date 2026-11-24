@@ -41,7 +41,6 @@ HELPLINES = {
 def referral_agent(state: NyayMitraState) -> dict:
     language = state.get("language", "en")
     domain = state.get("legal_domain", "general")
-    case_strength = state.get("case_strength", "medium")
 
     # Get DLSA info
     dlsa = DLSA_OFFICES.get("lucknow", DLSA_OFFICES["default"])

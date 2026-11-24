@@ -31,7 +31,6 @@ def calculate_confidence(
     research_results: List[Dict],
     kanoon_cases: List[Dict],
     final_response: str,
-    case_strength: str
 ) -> float:
     score = 0.5
 
@@ -50,8 +49,6 @@ def calculate_confidence(
     elif len(final_response) < 100:
         score -= 0.15
 
-    if case_strength in ["strong", "weak"]:
-        score += 0.05
 
     citations = check_citation_format(final_response)
     if citations:
@@ -87,13 +84,12 @@ def verification_agent(state: NyayMitraState) -> dict:
     final_response = state.get("final_response", "")
     research_results = state.get("research_results", [])
     kanoon_cases = state.get("kanoon_cases", [])
-    case_strength = state.get("case_strength", "medium")
     draft_document = state.get("draft_document", "")
     language = state.get("language", "en")
 
     # Calculate confidence
     confidence = calculate_confidence(
-        research_results, kanoon_cases, final_response, case_strength
+        research_results, kanoon_cases, final_response
     )
 
     # Check hallucination risk
@@ -102,7 +98,7 @@ def verification_agent(state: NyayMitraState) -> dict:
     if citations_in_response and not kanoon_cases and not research_results:
         hallucination_detected = True
     # Draft cites provisions that aren't in the retrieved legal context
-    if state.get("draft_unverified_citations"):
+    if state.get("draft_unverified_citations") or state.get("analysis_unverified_citations"):
         hallucination_detected = True
         confidence = min(confidence, 0.55)
 

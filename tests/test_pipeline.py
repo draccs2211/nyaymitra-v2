@@ -117,8 +117,7 @@ class TestVerificationAgent:
         state = make_state(
             final_response="Based on UP Urban Buildings Act, landlord must return deposit within 30 days. Verify from official sources before citing.",
             research_results=[{"content": "UP Urban Buildings Act security deposit"} for _ in range(5)],
-            kanoon_cases=[{"title": "Test Case", "url": "http://indiankanoon.org/doc/123"} for _ in range(3)],
-            case_strength="strong"
+            kanoon_cases=[{"title": "Test Case", "url": "http://indiankanoon.org/doc/123"} for _ in range(3)]
         )
         result = verification_agent(state)
         assert result["confidence_score"] > 0.6
@@ -127,8 +126,7 @@ class TestVerificationAgent:
         state = make_state(
             final_response="Some legal advice here.",
             research_results=[],
-            kanoon_cases=[],
-            case_strength="medium"
+            kanoon_cases=[]
         )
         result = verification_agent(state)
         assert "disclaimer" in result["final_response"].lower() or "verify" in result["final_response"].lower()
@@ -137,8 +135,7 @@ class TestVerificationAgent:
         state = make_state(
             final_response="Short",
             research_results=[],
-            kanoon_cases=[],
-            case_strength="medium"
+            kanoon_cases=[]
         )
         result = verification_agent(state)
         assert result["human_approval_needed"] == True or result["confidence_score"] < 0.70
@@ -147,8 +144,7 @@ class TestVerificationAgent:
         state = make_state(
             final_response="Legal advice",
             research_results=[{"content": "legal content"}],
-            kanoon_cases=[{"title": "Test Case", "url": "http://indiankanoon.org/doc/123"}],
-            case_strength="medium"
+            kanoon_cases=[{"title": "Test Case", "url": "http://indiankanoon.org/doc/123"}]
         )
         result = verification_agent(state)
         assert "indiankanoon.org" in result["final_response"] or len(result["verified_sources"]) > 0

@@ -40,6 +40,23 @@ DRAFTED = {
 }
 
 
+def analysis_json(summary="Analysis summary " * 10, **extra):
+    """JSON the analysis LLM is expected to return."""
+    payload = {
+        "summary": summary,
+        "applicable_law": ["Section 406 IPC - criminal breach of trust"],
+        "action_plan": ["Send legal notice to landlord", "File in Rent Control Court"],
+        "evidence_needed": ["Rent agreement", "Deposit receipt"],
+        "missing_facts": ["Date the flat was vacated"],
+        "uncertainties": ["Whether the agreement allows deductions"],
+        "questions_for_lawyer": ["Was the deposit paid by bank transfer?"],
+        "timeline": "Notice period 15 days",
+        "costs": "Court fee depends on claim value",
+    }
+    payload.update(extra)
+    return json.dumps(payload)
+
+
 def mock_drafting(monkeypatch, extraction=EXTRACTED, draft=DRAFTED):
     """Mock the drafting agent's two LLM calls (extraction, then drafting).
     Pass an Exception instance to make that call fail."""
@@ -200,28 +217,76 @@ class TestResearchOutput:
 
 # ─── Analysis ─────────────────────────────────────────────────────────────────
 
+RESEARCH_406 = [{"id": "ipc_section:1", "content": "Section 406 IPC / Section 316 BNS - Criminal breach of trust"}]
+
+
 class TestAnalysisOutput:
-    def test_llm_success_validates(self, monkeypatch):
+    def test_structured_analysis_rendered(self, monkeypatch):
         from backend.agents import analysis
-        text = "Applicable: Section 406 IPC.\n1. Send legal notice to landlord\n2. File in Rent Control Court"
-        monkeypatch.setattr(analysis, "OpenAI", fake_openai(text))
-        out = analysis.analysis_agent(make_state(user_query="deposit", legal_domain="property"))
-        assert out["final_response"] == text
-        assert out["case_analysis"]["domain"] == "property"
-        assert "Send legal notice to landlord" in out["next_steps"]
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(analysis_json()))
+        out = analysis.analysis_agent(make_state(user_query="deposit", legal_domain="property",
+                                                 research_results=RESEARCH_406))
+        ca = out["case_analysis"]
+        assert ca["missing_facts"] == ["Date the flat was vacated"]
+        assert ca["questions_for_lawyer"] == ["Was the deposit paid by bank transfer?"]
+        assert out["next_steps"] == ["Send legal notice to landlord", "File in Rent Control Court"]
+        text = out["final_response"]
+        for heading in ("**Summary**", "**Missing facts**", "**Uncertainties**", "**Questions for the lawyer**"):
+            assert heading in text
+        assert "1. Send legal notice to landlord" in text
+        assert out["analysis_unverified_citations"] == []      # 406 is in research
+        assert "case_strength" not in out
         schemas.AnalysisOutput(**out)
 
-    def test_llm_failure_fallback_validates(self, monkeypatch):
+    def test_hindi_headings(self, monkeypatch):
+        from backend.agents import analysis
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(analysis_json("मकान मालिक ने जमा राशि नहीं लौटाई")))
+        out = analysis.analysis_agent(make_state(user_query="जमा राशि", language="hi",
+                                                 research_results=RESEARCH_406))
+        assert "**अनुपलब्ध तथ्य**" in out["final_response"]
+        assert "**वकील के लिए प्रश्न**" in out["final_response"]
+
+    def test_invented_citation_flagged(self, monkeypatch):
+        from backend.agents import analysis
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(analysis_json(
+            applicable_law=["Section 406 IPC", "Section 420 IPC (cheating)"])))
+        out = analysis.analysis_agent(make_state(user_query="q", research_results=RESEARCH_406))
+        assert out["analysis_unverified_citations"] == ["420"]
+
+    def test_empty_sections_omitted_and_lenient_types(self, monkeypatch):
+        from backend.agents import analysis
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(json.dumps({
+            "summary": ["Part one.", "Part two."], "missing_facts": "single fact",
+            "uncertainties": None, "action_plan": []})))
+        out = analysis.analysis_agent(make_state(user_query="q"))
+        assert out["case_analysis"]["summary"] == "Part one. Part two."
+        assert out["case_analysis"]["missing_facts"] == ["single fact"]
+        assert "**Uncertainties**" not in out["final_response"]
+
+    @pytest.mark.parametrize("reply", ["not json", json.dumps({"summary": ""})])
+    def test_invalid_llm_output_falls_back(self, monkeypatch, reply):
+        from backend.agents import analysis
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(reply))
+        out = analysis.analysis_agent(make_state(user_query="q"))
+        assert "15100" in out["final_response"]
+        schemas.AnalysisOutput(**out)
+
+    def test_llm_failure_fallback_hides_error(self, monkeypatch):
         from backend.agents import analysis
 
         class Boom:
             def __init__(self, *a, **kw):
-                raise RuntimeError("api down")
+                raise RuntimeError("api key sk-secret invalid")
         monkeypatch.setattr(analysis, "OpenAI", Boom)
         out = analysis.analysis_agent(make_state(user_query="q"))
-        assert out["case_analysis"]["error"] == "api down"
-        assert out["case_strength"] == "medium"
+        assert out["case_analysis"]["error"] == "RuntimeError"
+        assert "sk-secret" not in out["final_response"]
         schemas.AnalysisOutput(**out)
+
+    def test_no_verdict_language_in_prompt_contract(self):
+        from backend.agents.analysis import SYSTEM_PROMPT
+        assert "NEVER give a verdict" in SYSTEM_PROMPT
+        assert not any(f in schemas.AnalysisLLMOutput.model_fields for f in ("case_strength", "verdict"))
 
 
 # ─── Drafting / Referral / Verification ──────────────────────────────────────
@@ -381,7 +446,7 @@ class TestEmergencyContinues:
         mock_guardian(monkeypatch, {"is_emergency": True, "emergency_type": "anticipatory_bail_urgent"})
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
             "legal_domain": "criminal", "requested_actions": ["research"]})))
-        monkeypatch.setattr(analysis, "OpenAI", fake_openai("Bail analysis " * 30))
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(analysis_json("Bail analysis summary")))
         monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "g:1", "content": "Bail types in India: anticipatory bail under Section 438 CrPC",
              "metadata": {"domain": "criminal"}}])
@@ -390,7 +455,7 @@ class TestEmergencyContinues:
         assert r["is_emergency"] is True and r["urgency_level"] == "HIGH"
         assert r["research_results"] and r["case_analysis"]           # not cut short
         assert r["final_response"].startswith(r["urgent_alert"])
-        assert "Bail analysis" in r["final_response"]
+        assert "Bail analysis summary" in r["final_response"]
         assert "Disclaimer" in r["final_response"]
 
 
@@ -424,7 +489,7 @@ class TestPipelineWithSchemas:
             "language": "en", "urgency": "low", "key_issues": ["unreturned deposit"],
             "suggested_acts": ["UP Rent Act"],
         })))
-        monkeypatch.setattr(analysis, "OpenAI", analysis_llm("Analysis text " * 30))
+        monkeypatch.setattr(analysis, "OpenAI", analysis_llm(analysis_json()))
         mock_drafting(monkeypatch)
         monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},

@@ -17,8 +17,6 @@ Language = Literal["en", "hi", "hinglish"]
 Urgency = Literal["critical", "high", "medium", "low"]
 # Actions the user asked for; executed in fixed pipeline order, not list order
 RequestedAction = Literal["research", "drafting", "referral"]
-# Set by analysis (strong/weak verdicts to be replaced per CLAUDE.md rules)
-CaseStrength = Literal["weak", "medium", "strong"]
 EmergencyType = Literal[
     "physical_threat", "domestic_violence", "sexual_assault", "custody_emergency",
     "illegal_detention", "anticipatory_bail_urgent", "property_emergency",
@@ -192,19 +190,64 @@ class ResearchOutput(_Base):
 
 # ─── Analysis ─────────────────────────────────────────────────────────────────
 
+def _to_str_list(v) -> List[str]:
+    if v is None:
+        return []
+    if isinstance(v, str):
+        v = [v]
+    return [str(x).strip() for x in v if x is not None and str(x).strip()]
+
+
+class AnalysisLLMOutput(BaseModel):
+    """Structured analysis from the LLM. No verdict fields by design (CLAUDE.md)."""
+    model_config = ConfigDict(extra="ignore")
+
+    summary: str = Field(min_length=1)
+    applicable_law: List[str] = Field(default_factory=list)
+    action_plan: List[str] = Field(default_factory=list)
+    evidence_needed: List[str] = Field(default_factory=list)
+    missing_facts: List[str] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+    questions_for_lawyer: List[str] = Field(default_factory=list)
+    timeline: str = ""
+    costs: str = ""
+
+    @field_validator("applicable_law", "action_plan", "evidence_needed", "missing_facts",
+                     "uncertainties", "questions_for_lawyer", mode="before")
+    @classmethod
+    def _lists(cls, v):
+        return _to_str_list(v)
+
+    @field_validator("summary", "timeline", "costs", mode="before")
+    @classmethod
+    def _strings(cls, v):
+        if isinstance(v, list):
+            v = " ".join(str(x) for x in v)
+        return "" if v is None else str(v).strip()
+
+
 class AnalysisDetail(_Base):
     analysis: str
     domain: Optional[str] = None
     cases_found: Optional[int] = None
     rag_results: Optional[int] = None
     error: Optional[str] = None
+    summary: Optional[str] = None
+    applicable_law: List[str] = Field(default_factory=list)
+    action_plan: List[str] = Field(default_factory=list)
+    evidence_needed: List[str] = Field(default_factory=list)
+    missing_facts: List[str] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+    questions_for_lawyer: List[str] = Field(default_factory=list)
+    timeline: Optional[str] = None
+    costs: Optional[str] = None
 
 
 class AnalysisOutput(_Base):
     case_analysis: AnalysisDetail
-    case_strength: CaseStrength
     next_steps: List[str] = Field(default_factory=list)
     final_response: str
+    analysis_unverified_citations: List[str] = Field(default_factory=list)
 
 
 # ─── Drafting ─────────────────────────────────────────────────────────────────

@@ -87,7 +87,9 @@ class QueryResponse(BaseModel):
     response: str
     confidence_score: float
     legal_domain: str
-    case_strength: str
+    missing_facts: List[str] = []           # facts that would change the analysis
+    uncertainties: List[str] = []
+    questions_for_lawyer: List[str] = []
     sources: List[str]
     next_steps: List[str]
     has_document: bool
@@ -127,7 +129,9 @@ def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryR
         response=result.get("final_response", "No response generated"),
         confidence_score=result.get("confidence_score", 0.5),
         legal_domain=result.get("legal_domain", "general"),
-        case_strength=result.get("case_strength", "medium"),
+        missing_facts=(result.get("case_analysis") or {}).get("missing_facts", []),
+        uncertainties=(result.get("case_analysis") or {}).get("uncertainties", []),
+        questions_for_lawyer=(result.get("case_analysis") or {}).get("questions_for_lawyer", []),
         sources=result.get("verified_sources", []),
         next_steps=result.get("next_steps", []),
         has_document=bool(result.get("draft_document")),
@@ -138,7 +142,8 @@ def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryR
         human_approval_needed=result.get("human_approval_needed", False),
         source_status=result.get("source_status", {}),
         missing_fields=result.get("draft_missing_fields", []),
-        unverified_citations=result.get("draft_unverified_citations", []),
+        unverified_citations=sorted(set(result.get("draft_unverified_citations", []))
+                                    | set(result.get("analysis_unverified_citations", []))),
         run_id=result.get("run_id"),
         approval_status=result.get("approval_status", "not_required"),
         response_time_ms=response_time_ms,
@@ -444,7 +449,6 @@ async def get_cases(
             "id": c.id,
             "title": c.title,
             "legal_domain": c.legal_domain,
-            "case_strength": c.case_strength,
             "status": c.status,
             "created_at": c.created_at.isoformat()
         }
@@ -464,7 +468,6 @@ async def get_case(
         "id": case.id,
         "title": case.title,
         "legal_domain": case.legal_domain,
-        "case_strength": case.case_strength,
         "status": case.status,
         "notes": case.notes,
         "created_at": case.created_at.isoformat()

@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.agents.schemas import ApprovalDecision
-from tests.test_agent_outputs import fake_openai, mock_drafting
+from tests.test_agent_outputs import analysis_json, fake_openai, mock_drafting
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def mocked_agents(monkeypatch):
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
             "legal_domain": "property", "requested_actions": actions, "language": "en",
         })))
-        monkeypatch.setattr(analysis, "OpenAI", fake_openai("Analysis text " * 30))
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(analysis_json()))
         mock_drafting(monkeypatch)
         monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
