@@ -24,6 +24,7 @@ class FakeRedis:
 def fake_redis(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(cache, "redis_client", fake)
+    monkeypatch.setattr(cache, "_redis_down_until", 0.0)
     return fake
 
 
@@ -66,3 +67,41 @@ class TestSessionIsolation:
     def test_user_id_required(self):
         with pytest.raises(ValueError):
             cache.get_session("sess-1", user_id="")
+
+
+class DownRedis:
+    def __init__(self):
+        self.calls = 0
+
+    def _fail(self, *a):
+        from redis.exceptions import ConnectionError
+        self.calls += 1
+        raise ConnectionError("refused")
+
+    get = setex = delete = _fail
+
+
+class TestCircuitBreaker:
+    def test_down_redis_is_skipped_after_first_failure(self, monkeypatch):
+        down = DownRedis()
+        monkeypatch.setattr(cache, "redis_client", down)
+        assert cache.get_session("s", user_id="u") is None
+        cache.store_session("s", {"h": 1}, user_id="u")
+        cache.set_cached_query("q", {}, scope="u")
+        assert cache.get_cached_query("q", scope="u") is None
+        assert down.calls == 1                      # only the first call hit Redis
+        assert cache.redis_available() is False
+
+    def test_retries_after_window(self, monkeypatch, fake_redis):
+        monkeypatch.setattr(cache, "_redis_down_until", 0.0)
+        cache.store_session("s", {"h": 1}, user_id="u")
+        assert cache.get_session("s", user_id="u") == {"h": 1}
+
+    def test_corrupt_json_returns_none(self, fake_redis):
+        fake_redis.setex(cache.make_key("session", "u", "s"), 60, "{not json")
+        assert cache.get_session("s", user_id="u") is None
+
+    def test_scope_validation_still_raises(self, monkeypatch):
+        monkeypatch.setattr(cache, "redis_client", DownRedis())
+        with pytest.raises(ValueError):
+            cache.get_cached_query("q", scope="")

@@ -21,7 +21,13 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+# Short timeouts: a down Redis must fail fast (cache is optional)
+redis_client = redis.from_url(
+    REDIS_URL,
+    decode_responses=True,
+    socket_connect_timeout=0.5,
+    socket_timeout=1.0,
+)
 
 
 def get_redis():

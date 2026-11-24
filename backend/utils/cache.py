@@ -1,7 +1,10 @@
 from backend.database.connection import get_redis
 from backend.config import QUERY_CACHE_TTL, EMBEDDING_CACHE_TTL, LLM_CACHE_TTL
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 import hashlib
 import json
+import time
 from typing import Optional
 
 
@@ -18,6 +21,55 @@ def make_key(prefix: str, *parts: str) -> str:
     return f"nyaymitra:{CACHE_VERSION}:{prefix}:{digest}"
 
 
+# ─── Redis access with circuit breaker ────────────────────────────────────────
+# When Redis is down every call would block for the connect timeout. After a
+# connection failure, skip Redis entirely for REDIS_RETRY_AFTER seconds.
+REDIS_RETRY_AFTER = 30.0
+_redis_down_until = 0.0
+
+
+def redis_available() -> bool:
+    return time.monotonic() >= _redis_down_until
+
+
+def _redis(op: str, *args):
+    """Run redis_client.<op>(*args). Returns None if Redis is down or errors."""
+    global _redis_down_until
+    if not redis_available():
+        return None
+    try:
+        return getattr(redis_client, op)(*args)
+    except (RedisConnectionError, RedisTimeoutError):
+        _redis_down_until = time.monotonic() + REDIS_RETRY_AFTER
+        return None
+    except Exception:
+        return None
+
+
+def _get_json(key: str):
+    cached = _redis("get", key)
+    if not cached:
+        return None
+    try:
+        return json.loads(cached)
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_json(key: str, value, ttl: int) -> None:
+    _redis("setex", key, ttl, json.dumps(value, default=str))
+
+
+def cache_get_json(key: str):
+    """Safe JSON get: returns None on miss or if Redis is unavailable."""
+    return _get_json(key)
+
+
+def cache_set_json(key: str, value, ttl: int) -> None:
+    """Safe JSON set: silently skips if Redis is unavailable."""
+    _set_json(key, value, ttl)
+
+
 def _query_key(query: str, scope: str, language: str, domain: str) -> str:
     if not scope:
         # Never share query results across tenants/users
@@ -26,61 +78,28 @@ def _query_key(query: str, scope: str, language: str, domain: str) -> str:
 
 
 def get_cached_query(query: str, *, scope: str, language: str = "", domain: str = "") -> Optional[dict]:
-    try:
-        cached = redis_client.get(_query_key(query, scope, language, domain))
-        if cached:
-            return json.loads(cached)
-    except ValueError:
-        raise
-    except Exception:
-        pass
-    return None
+    return _get_json(_query_key(query, scope, language, domain))
 
 
 def set_cached_query(query: str, response: dict, *, scope: str, language: str = "",
                      domain: str = "", ttl: int = QUERY_CACHE_TTL):
-    key = _query_key(query, scope, language, domain)
-    try:
-        redis_client.setex(key, ttl, json.dumps(response, default=str))
-    except Exception:
-        pass
+    _set_json(_query_key(query, scope, language, domain), response, ttl)
 
 
 def get_cached_embedding(text: str) -> Optional[list]:
-    key = make_key("embed", text)
-    try:
-        cached = redis_client.get(key)
-        if cached:
-            return json.loads(cached)
-    except Exception:
-        pass
-    return None
+    return _get_json(make_key("embed", text))
 
 
 def set_cached_embedding(text: str, embedding: list, ttl: int = EMBEDDING_CACHE_TTL):
-    key = make_key("embed", text)
-    try:
-        redis_client.setex(key, ttl, json.dumps(embedding))
-    except Exception:
-        pass
+    _set_json(make_key("embed", text), embedding, ttl)
 
 
 def get_cached_llm(prompt: str) -> Optional[str]:
-    key = make_key("llm", prompt)
-    try:
-        cached = redis_client.get(key)
-        return cached
-    except Exception:
-        pass
-    return None
+    return _redis("get", make_key("llm", prompt))
 
 
 def set_cached_llm(prompt: str, response: str, ttl: int = LLM_CACHE_TTL):
-    key = make_key("llm", prompt)
-    try:
-        redis_client.setex(key, ttl, response)
-    except Exception:
-        pass
+    _redis("setex", make_key("llm", prompt), ttl, response)
 
 
 def _session_key(session_id: str, user_id: str) -> str:
@@ -90,27 +109,12 @@ def _session_key(session_id: str, user_id: str) -> str:
 
 
 def store_session(session_id: str, data: dict, *, user_id: str, ttl: int = 3600):
-    key = _session_key(session_id, user_id)
-    try:
-        redis_client.setex(key, ttl, json.dumps(data, default=str))
-    except Exception:
-        pass
+    _set_json(_session_key(session_id, user_id), data, ttl)
 
 
 def get_session(session_id: str, *, user_id: str) -> Optional[dict]:
-    key = _session_key(session_id, user_id)
-    try:
-        cached = redis_client.get(key)
-        if cached:
-            return json.loads(cached)
-    except Exception:
-        pass
-    return None
+    return _get_json(_session_key(session_id, user_id))
 
 
 def clear_session(session_id: str, *, user_id: str):
-    key = _session_key(session_id, user_id)
-    try:
-        redis_client.delete(key)
-    except Exception:
-        pass
+    _redis("delete", _session_key(session_id, user_id))
