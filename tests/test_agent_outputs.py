@@ -181,7 +181,7 @@ class TestResearchOutput:
             {"id": "legal_guidance:def", "content": "Security deposit guidance",
              "score": 2.1, "source": "sparse"},
         ]
-        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: docs)
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: docs)
         out = research.research_agent(make_state(user_query="deposit", legal_domain="property"))
         assert [r["id"] for r in out["research_results"]] == ["act:abc", "legal_guidance:def"]
         assert out["research_results"][1]["metadata"] == {}
@@ -382,7 +382,7 @@ class TestEmergencyContinues:
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
             "legal_domain": "criminal", "requested_actions": ["research"]})))
         monkeypatch.setattr(analysis, "OpenAI", fake_openai("Bail analysis " * 30))
-        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "g:1", "content": "Bail types in India: anticipatory bail under Section 438 CrPC",
              "metadata": {"domain": "criminal"}}])
 
@@ -426,7 +426,7 @@ class TestPipelineWithSchemas:
         })))
         monkeypatch.setattr(analysis, "OpenAI", analysis_llm("Analysis text " * 30))
         mock_drafting(monkeypatch)
-        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
         ])
 

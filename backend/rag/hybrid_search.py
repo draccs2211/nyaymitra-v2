@@ -15,6 +15,21 @@ from backend.rag.metadata import DocMetadata
 import cohere
 import pickle
 import os
+import re
+
+# Bump when tokenize() changes: a cached BM25 index built with an older
+# tokenizer is discarded and rebuilt from Chroma.
+TOKENIZER_VERSION = 2
+_TOKEN_RE = re.compile(r"[0-9a-z\u0900-\u097F]+")
+
+
+def tokenize(text: str) -> List[str]:
+    """
+    BM25 tokens: lowercase runs of Latin letters/digits or Devanagari
+    (incl. matras), so punctuation never sticks to words ("flat?" -> "flat",
+    "498A," -> "498a").
+    """
+    return _TOKEN_RE.findall((text or "").lower())
 
 
 class HybridRAG:
@@ -66,6 +81,7 @@ class HybridRAG:
                 "id_map": self.bm25_id_map,
                 "ids": self.bm25_ids,
                 "metas": self.bm25_metas,
+                "tokenizer": TOKENIZER_VERSION,
             }
             with open(self._bm25_cache_path(), "wb") as f:
                 pickle.dump(cache, f)
@@ -81,6 +97,9 @@ class HybridRAG:
         try:
             with open(path, "rb") as f:
                 cache = pickle.load(f)
+            if cache.get("tokenizer") != TOKENIZER_VERSION:
+                print("[BM25] Cached index uses an old tokenizer — will rebuild")
+                return
             self.bm25_index = cache["index"]
             self.bm25_docs = cache["docs"]
             self.bm25_id_map = cache["id_map"]
@@ -110,7 +129,7 @@ class HybridRAG:
             self.bm25_ids.append(canonical_id)
 
         if self.bm25_docs:
-            tokenized = [d.lower().split() for d in self.bm25_docs]
+            tokenized = [tokenize(d) for d in self.bm25_docs]
             self.bm25_index = BM25Okapi(tokenized)
         else:
             self.bm25_index = None
@@ -168,7 +187,9 @@ class HybridRAG:
         if not self.bm25_index or not self.bm25_docs:
             return []
 
-        tokenized_query = query.lower().split()
+        tokenized_query = tokenize(query)
+        if not tokenized_query:
+            return []
         scores = self.bm25_index.get_scores(tokenized_query)
         top_indices = sorted(
             range(len(scores)),
@@ -191,38 +212,49 @@ class HybridRAG:
 
     # ── RRF Fusion ────────────────────────────────────────────────────────────
 
+    def fuse(self, result_lists: List[List[Dict]], k: int = 60) -> List[Dict]:
+        """
+        Reciprocal Rank Fusion over any number of ranked lists (dense/sparse,
+        per query). Canonical IDs let the same doc accumulate score across lists.
+        """
+        scores: Dict[str, float] = {}
+        doc_map: Dict[str, Dict] = {}
+        for results in result_lists:
+            for rank, doc in enumerate(results):
+                cid = doc["id"]
+                scores[cid] = scores.get(cid, 0) + 1 / (rank + k)
+                doc_map.setdefault(cid, doc)    # first occurrence (dense keeps distance score)
+
+        fused = []
+        for cid in sorted(scores, key=lambda x: scores[x], reverse=True):
+            doc = doc_map[cid].copy()
+            doc["rrf_score"] = round(scores[cid], 4)
+            fused.append(doc)
+        return fused
+
     def reciprocal_rank_fusion(
         self,
         dense_results: List[Dict],
         sparse_results: List[Dict],
         k: int = 60
     ) -> List[Dict]:
-        """
-        RRF fusion using canonical IDs.
-        Same doc found by both dense + sparse → score DOUBLES correctly.
-        """
-        scores: Dict[str, float] = {}
-        doc_map: Dict[str, Dict] = {}
+        """RRF of one dense + one sparse list (kept for callers/tests)."""
+        return self.fuse([dense_results, sparse_results], k)
 
-        for rank, doc in enumerate(dense_results):
-            canonical_id = doc["id"]
-            scores[canonical_id] = scores.get(canonical_id, 0) + 1 / (rank + k)
-            doc_map[canonical_id] = doc
-
-        for rank, doc in enumerate(sparse_results):
-            canonical_id = doc["id"]
-            # ← Now correctly identifies same doc found by both searches!
-            scores[canonical_id] = scores.get(canonical_id, 0) + 1 / (rank + k)
-            if canonical_id not in doc_map:
-                doc_map[canonical_id] = doc
-
-        sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
-        fused = []
-        for canonical_id in sorted_ids:
-            doc = doc_map[canonical_id].copy()
-            doc["rrf_score"] = round(scores[canonical_id], 4)
-            fused.append(doc)
-        return fused
+    def retrieve(self, queries: List[str], top_k: int = TOP_K_RESULTS) -> List[Dict]:
+        """Dense + sparse for each distinct query, all fused with RRF (no rerank/filter)."""
+        seen, distinct = set(), []
+        for q in queries:
+            key = (q or "").strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                distinct.append(q.strip())
+        lists = []
+        for q in distinct:
+            lists.append(self.dense_search(q, top_k))
+            lists.append(self.sparse_search(q, top_k))
+        print(f"[RAG] queries={len(distinct)} lists={[len(x) for x in lists]}")
+        return self.fuse(lists)
 
     # ── Reranking ─────────────────────────────────────────────────────────────
 
@@ -262,29 +294,21 @@ class HybridRAG:
         self,
         query: str,
         legal_domain: Optional[str] = None,
-        top_k: int = TOP_K_RESULTS
+        top_k: int = TOP_K_RESULTS,
+        extra_queries: Optional[List[str]] = None,
     ) -> List[Dict]:
         """
         Full hybrid search pipeline:
-        1. Dense search (ChromaDB)
-        2. Sparse search (BM25) — same canonical IDs
-        3. RRF fusion — correctly combines scores
-        4. Reranking (Cohere)
-        5. Domain filtering
+        1. Dense (ChromaDB) + sparse (BM25) for the query and any extra queries
+           (e.g. an English rewrite of a Hindi/Hinglish query)
+        2. RRF fusion across all lists (canonical IDs)
+        3. Reranking (Cohere) against the original query
+        4. Domain filtering (falls back to unfiltered if it removes everything)
         """
-        dense_results = self.dense_search(query, top_k)
-        sparse_results = self.sparse_search(query, top_k)
+        fused = self.retrieve([query] + list(extra_queries or []), top_k)
 
-        # Log for debugging
-        print(f"[RAG] Dense: {len(dense_results)} | Sparse: {len(sparse_results)}")
-
-        # RRF fusion — canonical IDs ensure correct score combining
-        fused = self.reciprocal_rank_fusion(dense_results, sparse_results)
-
-        # Rerank
         reranked = self.rerank(query, fused, top_k=RERANK_TOP_K)
 
-        # Domain filter — if no results after filter, return all
         if legal_domain:
             filtered = [
                 d for d in reranked

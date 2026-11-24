@@ -14,6 +14,7 @@ class NyayMitraState(TypedDict):
     # Routing (set by orchestrator)
     legal_domain: str                # criminal, civil, family, etc.
     requested_actions: List[str]     # subset of research / drafting / referral
+    search_query_en: str             # English rewrite of the query for retrieval ("" if none)
     classification: Dict[str, Any]   # urgency, key_issues, suggested_acts, reasoning
 
     # Emergency
@@ -77,6 +78,7 @@ def initial_state(**overrides) -> NyayMitraState:
         "conversation_history": [],
         "legal_domain": "general",
         "requested_actions": [],
+        "search_query_en": "",
         "classification": {},
         "is_emergency": False,
         "emergency_type": "",

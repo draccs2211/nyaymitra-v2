@@ -23,7 +23,7 @@ def mocked_agents(monkeypatch):
         })))
         monkeypatch.setattr(analysis, "OpenAI", fake_openai("Analysis text " * 30))
         mock_drafting(monkeypatch)
-        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
         ] * 5)
     return configure

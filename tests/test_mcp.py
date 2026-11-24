@@ -121,7 +121,7 @@ RAG = [
 @pytest.fixture
 def research(monkeypatch):
     from backend.agents import research as mod
-    monkeypatch.setattr(mod.hybrid_rag, "search", lambda q, d=None: RAG)
+    monkeypatch.setattr(mod.hybrid_rag, "search", lambda q, d=None, **kw: RAG)
     return mod
 
 
@@ -178,7 +178,7 @@ class TestResearchAgent:
         assert [s["id"] for s in out["ipc_sections"]] == ["ipc_section:a"]   # corpus only
 
     def test_no_sections_means_legal_reference_skipped(self, research, monkeypatch):
-        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: RAG[1:])
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None, **kw: RAG[1:])
         out = research.research_agent(make_state(user_query="deposit"))
         assert out["source_status"]["legal_reference"] == "skipped"
 

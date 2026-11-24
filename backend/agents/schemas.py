@@ -85,6 +85,7 @@ class ClassificationLLMOutput(BaseModel):
     legal_domain: str = "general"
     requested_actions: List[RequestedAction] = Field(default_factory=lambda: ["research"])
     language: Language = "en"
+    search_query_en: str = ""
     urgency: Urgency = "low"
     key_issues: List[str] = Field(default_factory=list)
     suggested_acts: List[str] = Field(default_factory=list)
@@ -94,6 +95,11 @@ class ClassificationLLMOutput(BaseModel):
     @classmethod
     def _domain(cls, v):
         return _coerce_choice(v, tuple(LEGAL_DOMAINS), "general")
+
+    @field_validator("search_query_en", mode="before")
+    @classmethod
+    def _search_query(cls, v):
+        return " ".join(str(v).split())[:300] if v else ""
 
     @field_validator("language", mode="before")
     @classmethod
@@ -140,6 +146,7 @@ class OrchestratorOutput(_Base):
     legal_domain: str
     requested_actions: List[RequestedAction] = Field(min_length=1)
     language: Language
+    search_query_en: str = ""
     classification: ClassificationMeta
 
 

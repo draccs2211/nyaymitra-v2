@@ -22,6 +22,7 @@ Analyze the given legal query and return a JSON response with the following fiel
     "legal_domain": "<one of: criminal, civil, family, property, consumer, rti, labor, constitutional, general>",
     "requested_actions": ["<every action the query asks for — one or more of: research, drafting, referral>"],
     "language": "<one of: en, hi, hinglish>",
+    "search_query_en": "<the legal issue restated as a short English search query>",
     "urgency": "<one of: critical, high, medium, low>",
     "key_issues": ["<issue 1>", "<issue 2>"],
     "suggested_acts": ["<Act 1>", "<Act 2>"],
@@ -46,6 +47,11 @@ Requested actions (a query can ask for several — include ALL that apply):
 Example: "Draft a legal notice to my landlord and tell me where to get free legal aid" -> ["research", "drafting", "referral"]
 Example: "Only give me the DLSA contact for Lucknow" -> ["referral"]
 If unsure, include "research".
+
+Search query (search_query_en):
+- Restate the user's legal issue as a concise English search query using standard Indian legal terms.
+- Translate Hindi / Hinglish faithfully (e.g. "patni pati se har mahine kharcha chahti hai" -> "wife claiming monthly maintenance from husband").
+- Do NOT add facts, section numbers or Acts that the query does not mention.
 
 Language detection:
 - hi: Query predominantly in Hindi (Devanagari script)
@@ -108,6 +114,7 @@ Classify this query and return JSON."""
             legal_domain=result.legal_domain,
             requested_actions=result.requested_actions,
             language=result.language,
+            search_query_en=result.search_query_en,
             classification=ClassificationMeta(
                 urgency=result.urgency,
                 key_issues=result.key_issues,
