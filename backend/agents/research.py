@@ -1,10 +1,10 @@
 from backend.state import NyayMitraState
 from backend.rag.hybrid_search import hybrid_rag
-from backend.config import INDIAN_KANOON_API_KEY, INDIAN_KANOON_BASE_URL, GROQ_API_KEY
+from backend.config import INDIAN_KANOON_API_KEY, INDIAN_KANOON_BASE_URL
+from backend.agents.schemas import KanoonCase, ResearchOutput, RetrievedDoc, to_state
 from langsmith import traceable
 import httpx
 import asyncio
-import json
 
 
 @traceable(name="IndianKanoon Search")
@@ -69,8 +69,8 @@ def research_agent(state: NyayMitraState) -> dict:
     ipc_results = hybrid_rag.search(ipc_query, domain)
     ipc_sections = [r for r in ipc_results if "section" in r.get("content", "").lower()][:3]
 
-    return {
-        "research_results": rag_results,
-        "kanoon_cases": kanoon_results,
-        "ipc_sections": ipc_sections,
-    }
+    return to_state(ResearchOutput(
+        research_results=[RetrievedDoc(**r) for r in rag_results],
+        kanoon_cases=[KanoonCase(**c) for c in kanoon_results],
+        ipc_sections=[RetrievedDoc(**r) for r in ipc_sections],
+    ))
