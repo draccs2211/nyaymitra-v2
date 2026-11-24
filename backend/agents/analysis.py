@@ -44,11 +44,21 @@ def analysis_agent(state: NyayMitraState) -> dict:
 
     context = "\n".join(context_parts) if context_parts else "No specific cases found — providing general legal guidance."
 
+    classification = state.get("classification") or {}
+    key_issues = classification.get("key_issues") or []
+    suggested_acts = classification.get("suggested_acts") or []
+    issues_block = ""
+    if key_issues or suggested_acts:
+        issues_block = (
+            f"Key issues identified: {'; '.join(key_issues) or 'none'}\n"
+            f"Possibly relevant Acts (unverified, from classifier): {'; '.join(suggested_acts) or 'none'}\n"
+        )
+
     user_prompt = f"""
 Legal Domain: {domain}
 User Query: {query}
 Language preference: {language}
-
+{issues_block}
 Context from legal database:
 {context}
 

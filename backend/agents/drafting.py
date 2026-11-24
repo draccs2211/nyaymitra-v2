@@ -3,7 +3,7 @@ Drafting Agent - NyayMitra 2.0
 Generates legal documents using templates.
 Upgrade planned: OpenAI-based intelligent drafting after testing.
 """
-from backend.state import NyayMitraState
+from backend.state import NyayMitraState, initial_state
 from backend.agents.schemas import DraftingOutput, to_state
 from langsmith import traceable
 from datetime import datetime
@@ -409,19 +409,7 @@ if __name__ == "__main__":
         },
     ]
 
-    base_state = {
-        "user_query": "", "language": "en", "session_id": "test",
-        "user_id": "test", "conversation_history": [], "legal_domain": "general",
-        "needs_document": True, "needs_research": True, "needs_referral": False,
-        "is_emergency": False, "emergency_type": "", "research_results": [],
-        "kanoon_cases": [], "ipc_sections": [], "case_analysis": {},
-        "case_strength": "medium", "draft_document": "", "document_type": "",
-        "document_hindi": "", "document_english": "", "confidence_score": 0.0,
-        "hallucination_detected": False, "human_approval_needed": False,
-        "verified_sources": [], "dlsa_offices": [], "lawyer_referrals": [],
-        "final_response": "", "final_response_hindi": "", "sources": [],
-        "next_steps": [], "error": None, "retry_count": 0,
-    }
+    base_state = initial_state()
 
     print("=" * 60)
     print("DRAFTING AGENT TEST")

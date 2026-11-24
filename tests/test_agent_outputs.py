@@ -50,27 +50,37 @@ class TestOrchestratorOutput:
 
     def test_valid_llm_json(self, monkeypatch):
         out = self._run(monkeypatch, {
-            "legal_domain": "property", "needs_document": True,
-            "needs_referral": False, "language": "hinglish", "urgency": "medium",
-            "query_type": "drafting", "key_issues": ["deposit"],
+            "legal_domain": "property", "requested_actions": ["research", "drafting"],
+            "language": "hinglish", "urgency": "medium", "key_issues": ["deposit"],
             "suggested_acts": ["UP Rent Act"], "reasoning": "tenant issue",
         })
         assert out["legal_domain"] == "property"
-        assert out["needs_document"] is True
+        assert out["requested_actions"] == ["research", "drafting"]
         assert out["language"] == "hinglish"
-        assert out["case_analysis"]["key_issues"] == ["deposit"]
+        assert out["classification"]["key_issues"] == ["deposit"]
+        assert "case_analysis" not in out
         schemas.OrchestratorOutput(**out)
 
     def test_invalid_enum_values_coerced(self, monkeypatch):
         out = self._run(monkeypatch, {
             "legal_domain": "Tax Law", "language": "tamil", "urgency": "ASAP",
-            "needs_document": "yes", "key_issues": "single issue",
+            "requested_actions": ["Drafting", "drafting", "translate", "REFERRAL"],
+            "key_issues": "single issue",
         })
         assert out["legal_domain"] == "general"
         assert out["language"] == "en"
-        assert out["case_analysis"]["urgency"] == "low"
-        assert out["needs_document"] is True
-        assert out["case_analysis"]["key_issues"] == ["single issue"]
+        assert out["classification"]["urgency"] == "low"
+        assert out["requested_actions"] == ["drafting", "referral"]
+        assert out["classification"]["key_issues"] == ["single issue"]
+
+    @pytest.mark.parametrize("actions", [[], None, ["unknown"], "nonsense"])
+    def test_empty_or_unknown_actions_default_to_research(self, monkeypatch, actions):
+        out = self._run(monkeypatch, {"legal_domain": "civil", "requested_actions": actions})
+        assert out["requested_actions"] == ["research"]
+
+    def test_single_string_action_accepted(self, monkeypatch):
+        out = self._run(monkeypatch, {"requested_actions": "referral"})
+        assert out["requested_actions"] == ["referral"]
 
     def test_case_normalized(self, monkeypatch):
         out = self._run(monkeypatch, {"legal_domain": " Criminal ", "language": "HI"})
@@ -79,7 +89,8 @@ class TestOrchestratorOutput:
 
     def test_non_json_falls_back(self, monkeypatch):
         out = self._run(monkeypatch, "not json at all")
-        assert out["case_analysis"]["reasoning"] == "Fallback classification used"
+        assert out["classification"]["reasoning"] == "Fallback classification used"
+        assert out["requested_actions"] == ["research"]
         schemas.OrchestratorOutput(**out)
 
 
@@ -172,28 +183,72 @@ class TestVerificationOutput:
 
 # ─── End-to-end (all external calls mocked) ──────────────────────────────────
 
+class TestRouting:
+    """Pure routing functions — no agents executed."""
+
+    @pytest.mark.parametrize("actions,after_orch,after_analysis,after_drafting", [
+        (["research"],                          "research",      "verification", "verification"),
+        (["drafting"],                          "research",      "drafting",     "verification"),
+        (["referral"],                          "referral_only", "referral",     "referral"),
+        (["research", "referral"],              "research",      "referral",     "referral"),
+        (["drafting", "referral"],              "research",      "drafting",     "referral"),
+        (["referral", "drafting", "research"],  "research",      "drafting",     "referral"),
+        ([],                                    "research",      "verification", "verification"),
+    ])
+    def test_routes(self, actions, after_orch, after_analysis, after_drafting):
+        from backend import pipeline
+        st = make_state(requested_actions=actions)
+        assert pipeline.route_after_orchestrator(st) == after_orch
+        assert pipeline.route_after_analysis(st) == after_analysis
+        assert pipeline.route_after_drafting(st) == after_drafting
+
+
 class TestPipelineWithSchemas:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("needs_document", [False, True])
-    async def test_full_graph(self, monkeypatch, needs_document):
+    @pytest.mark.parametrize("actions", [
+        ["research"],
+        ["research", "drafting", "referral"],
+        ["referral"],
+    ])
+    async def test_full_graph(self, monkeypatch, actions):
         from backend.agents import orchestrator, analysis, research
         from backend.pipeline import run_pipeline
 
+        prompts = []
+
+        def analysis_llm(content):
+            cls = fake_openai(content)
+            class Spy(cls):
+                def __init__(self, *a, **kw):
+                    super().__init__()
+                    create = self.chat.completions.create
+                    def spy(**kw):
+                        prompts.append(kw["messages"][-1]["content"])
+                        return create(**kw)
+                    self.chat.completions.create = spy
+            return Spy
+
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
-            "legal_domain": "property", "needs_document": needs_document,
-            "needs_referral": True, "language": "en", "urgency": "low",
-            "query_type": "research", "key_issues": ["deposit"],
+            "legal_domain": "property", "requested_actions": actions,
+            "language": "en", "urgency": "low", "key_issues": ["unreturned deposit"],
+            "suggested_acts": ["UP Rent Act"],
         })))
-        monkeypatch.setattr(analysis, "OpenAI", fake_openai("Analysis text " * 30))
+        monkeypatch.setattr(analysis, "OpenAI", analysis_llm("Analysis text " * 30))
         monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
         ])
 
         result = await run_pipeline("landlord kept deposit", "s1", "u1")
         assert result["legal_domain"] == "property"
-        assert result["research_results"][0]["id"] == "act:1"
-        assert result["dlsa_offices"]                       # referral ran
-        assert "Disclaimer" in result["final_response"]     # verification ran
-        assert bool(result["draft_document"]) is needs_document
-        if needs_document:
-            assert result["human_approval_needed"] is True
+        assert result["requested_actions"] == actions
+        # classification survives analysis (no longer overwritten)
+        assert result["classification"]["key_issues"] == ["unreturned deposit"]
+        assert "Disclaimer" in result["final_response"]          # verification always runs
+
+        ran_research = actions != ["referral"]
+        assert bool(result["research_results"]) is ran_research
+        assert bool(result["case_analysis"]) is ran_research
+        if ran_research:
+            assert "unreturned deposit" in prompts[0]           # issues fed to analysis
+        assert bool(result["draft_document"]) is ("drafting" in actions)
+        assert bool(result["dlsa_offices"]) is ("referral" in actions)

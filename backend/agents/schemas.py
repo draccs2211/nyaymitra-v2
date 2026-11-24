@@ -15,7 +15,8 @@ from backend.config import LEGAL_DOMAINS
 
 Language = Literal["en", "hi", "hinglish"]
 Urgency = Literal["critical", "high", "medium", "low"]
-QueryType = Literal["research", "drafting", "analysis", "referral", "general"]
+# Actions the user asked for; executed in fixed pipeline order, not list order
+RequestedAction = Literal["research", "drafting", "referral"]
 # "urgent" is set by guardian; weak/medium/strong by analysis (to be replaced per CLAUDE.md rules)
 CaseStrength = Literal["weak", "medium", "strong", "urgent"]
 DocumentType = Literal[
@@ -60,11 +61,9 @@ class ClassificationLLMOutput(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     legal_domain: str = "general"
-    needs_document: bool = False
-    needs_referral: bool = False
+    requested_actions: List[RequestedAction] = Field(default_factory=lambda: ["research"])
     language: Language = "en"
     urgency: Urgency = "low"
-    query_type: QueryType = "general"
     key_issues: List[str] = Field(default_factory=list)
     suggested_acts: List[str] = Field(default_factory=list)
     reasoning: str = ""
@@ -84,17 +83,19 @@ class ClassificationLLMOutput(BaseModel):
     def _urgency(cls, v):
         return _coerce_choice(v, get_args(Urgency), "low")
 
-    @field_validator("query_type", mode="before")
+    @field_validator("requested_actions", mode="before")
     @classmethod
-    def _query_type(cls, v):
-        return _coerce_choice(v, get_args(QueryType), "general")
-
-    @field_validator("needs_document", "needs_referral", mode="before")
-    @classmethod
-    def _bool(cls, v):
+    def _actions(cls, v):
+        """Keep known actions, de-duplicated in order; never empty."""
         if isinstance(v, str):
-            return v.strip().lower() in ("true", "yes", "1")
-        return bool(v) if v is not None else False
+            v = [v]
+        allowed = get_args(RequestedAction)
+        out = []
+        for a in v or []:
+            a = a.strip().lower() if isinstance(a, str) else a
+            if a in allowed and a not in out:
+                out.append(a)
+        return out or ["research"]
 
     @field_validator("key_issues", "suggested_acts", mode="before")
     @classmethod
@@ -108,7 +109,6 @@ class ClassificationLLMOutput(BaseModel):
 
 class ClassificationMeta(_Base):
     urgency: Urgency
-    query_type: QueryType
     key_issues: List[str] = Field(default_factory=list)
     suggested_acts: List[str] = Field(default_factory=list)
     reasoning: str = ""
@@ -116,11 +116,9 @@ class ClassificationMeta(_Base):
 
 class OrchestratorOutput(_Base):
     legal_domain: str
-    needs_document: bool
-    needs_research: bool = True
-    needs_referral: bool
+    requested_actions: List[RequestedAction] = Field(min_length=1)
     language: Language
-    case_analysis: ClassificationMeta
+    classification: ClassificationMeta
 
 
 # ─── Research ─────────────────────────────────────────────────────────────────

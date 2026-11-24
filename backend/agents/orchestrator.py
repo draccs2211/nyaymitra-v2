@@ -3,7 +3,7 @@ Orchestrator Agent - NyayMitra 2.0
 Uses OpenAI GPT-4o-mini to intelligently classify legal queries.
 No hardcoded keywords — pure LLM-based classification.
 """
-from backend.state import NyayMitraState
+from backend.state import NyayMitraState, initial_state
 from backend.config import OPENAI_API_KEY
 from backend.agents.schemas import (
     ClassificationLLMOutput, ClassificationMeta, OrchestratorOutput, to_state
@@ -20,11 +20,9 @@ Analyze the given legal query and return a JSON response with the following fiel
 
 {
     "legal_domain": "<one of: criminal, civil, family, property, consumer, rti, labor, constitutional, general>",
-    "needs_document": <true if user needs a document drafted — legal notice, RTI, complaint, petition, vakalatnama, affidavit etc., else false>,
-    "needs_referral": <true if user needs referral to lawyer, DLSA, legal aid, helpline, else false>,
+    "requested_actions": ["<every action the query asks for — one or more of: research, drafting, referral>"],
     "language": "<one of: en, hi, hinglish>",
     "urgency": "<one of: critical, high, medium, low>",
-    "query_type": "<one of: research, drafting, analysis, referral, general>",
     "key_issues": ["<issue 1>", "<issue 2>"],
     "suggested_acts": ["<Act 1>", "<Act 2>"],
     "reasoning": "<one line explanation of classification>"
@@ -40,6 +38,14 @@ Domain definitions:
 - labor: salary, employment, termination, PF, ESI, gratuity, labor disputes
 - constitutional: fundamental rights, writ petitions, PIL, High Court, Supreme Court
 - general: general legal advice not fitting above categories
+
+Requested actions (a query can ask for several — include ALL that apply):
+- research: legal research / analysis of the situation, applicable law, options
+- drafting: a document should be drafted — legal notice, RTI application, complaint, petition, vakalatnama, affidavit etc.
+- referral: referral to legal aid, DLSA, Lok Adalat, a lawyer or helpline is asked for or clearly needed
+Example: "Draft a legal notice to my landlord and tell me where to get free legal aid" -> ["research", "drafting", "referral"]
+Example: "Only give me the DLSA contact for Lucknow" -> ["referral"]
+If unsure, include "research".
 
 Language detection:
 - hi: Query predominantly in Hindi (Devanagari script)
@@ -95,18 +101,15 @@ Classify this query and return JSON."""
         result_text = response.choices[0].message.content
         result = ClassificationLLMOutput.model_validate(json.loads(result_text))
 
-        print(f"[Orchestrator] Domain: {result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Doc: {result.needs_document}")
+        print(f"[Orchestrator] Domain: {result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Actions: {result.requested_actions}")
         print(f"[Orchestrator] Reasoning: {result.reasoning}")
 
         return to_state(OrchestratorOutput(
             legal_domain=result.legal_domain,
-            needs_document=result.needs_document,
-            needs_research=True,
-            needs_referral=result.needs_referral,
+            requested_actions=result.requested_actions,
             language=result.language,
-            case_analysis=ClassificationMeta(
+            classification=ClassificationMeta(
                 urgency=result.urgency,
-                query_type=result.query_type,
                 key_issues=result.key_issues,
                 suggested_acts=result.suggested_acts,
                 reasoning=result.reasoning,
@@ -136,13 +139,10 @@ def _fallback_classification(query: str) -> dict:
 
     return to_state(OrchestratorOutput(
         legal_domain="general",
-        needs_document=False,
-        needs_research=True,
-        needs_referral=False,
+        requested_actions=["research"],
         language=language,
-        case_analysis=ClassificationMeta(
+        classification=ClassificationMeta(
             urgency="low",
-            query_type="general",
             reasoning="Fallback classification used",
         ),
     ))
@@ -163,19 +163,7 @@ if __name__ == "__main__":
         "PF not credited by employer for last 6 months",
     ]
 
-    base_state = {
-        "user_query": "", "language": "en", "session_id": "test",
-        "user_id": "test", "conversation_history": [], "legal_domain": "general",
-        "needs_document": False, "needs_research": True, "needs_referral": False,
-        "is_emergency": False, "emergency_type": "", "research_results": [],
-        "kanoon_cases": [], "ipc_sections": [], "case_analysis": {},
-        "case_strength": "medium", "draft_document": "", "document_type": "",
-        "document_hindi": "", "document_english": "", "confidence_score": 0.0,
-        "hallucination_detected": False, "human_approval_needed": False,
-        "verified_sources": [], "dlsa_offices": [], "lawyer_referrals": [],
-        "final_response": "", "final_response_hindi": "", "sources": [],
-        "next_steps": [], "error": None, "retry_count": 0,
-    }
+    base_state = initial_state()
 
     print("=" * 60)
     print("ORCHESTRATOR AGENT TEST — LLM Based")
@@ -188,10 +176,9 @@ if __name__ == "__main__":
         result = orchestrator_agent(base_state)
         print(f"Domain   : {result['legal_domain']}")
         print(f"Language : {result['language']}")
-        print(f"Doc need : {result['needs_document']}")
-        print(f"Referral : {result['needs_referral']}")
-        issues = result.get('case_analysis', {}).get('key_issues', [])
-        acts = result.get('case_analysis', {}).get('suggested_acts', [])
+        print(f"Actions  : {result['requested_actions']}")
+        issues = result['classification']['key_issues']
+        acts = result['classification']['suggested_acts']
         if issues:
             print(f"Issues   : {', '.join(issues[:2])}")
         if acts:

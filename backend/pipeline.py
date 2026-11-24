@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, END
-from backend.state import NyayMitraState
+from backend.state import NyayMitraState, initial_state
 from backend.agents.guardian import guardian_agent
 from backend.agents.orchestrator import orchestrator_agent
 from backend.agents.research import research_agent
@@ -17,22 +17,28 @@ def check_emergency(state: NyayMitraState) -> Literal["emergency", "normal"]:
     return "normal"
 
 
+def _wants(state: NyayMitraState, action: str) -> bool:
+    return action in (state.get("requested_actions") or ["research"])
+
+
 def route_after_orchestrator(state: NyayMitraState) -> Literal["research", "referral_only"]:
-    if state.get("needs_referral", False) and not state.get("needs_research", True):
+    # Research + analysis are skipped only when referral is the sole request
+    actions = set(state.get("requested_actions") or ["research"])
+    if actions == {"referral"}:
         return "referral_only"
     return "research"
 
 
 def route_after_analysis(state: NyayMitraState) -> Literal["drafting", "referral", "verification"]:
-    if state.get("needs_document", False):
+    if _wants(state, "drafting"):
         return "drafting"
-    if state.get("needs_referral", False):
+    if _wants(state, "referral"):
         return "referral"
     return "verification"
 
 
 def route_after_drafting(state: NyayMitraState) -> Literal["referral", "verification"]:
-    if state.get("needs_referral", False):
+    if _wants(state, "referral"):
         return "referral"
     return "verification"
 
@@ -140,40 +146,12 @@ async def run_pipeline(
     user_id: str,
     conversation_history: list = None
 ) -> dict:
-    initial_state: NyayMitraState = {
-        "user_query": query,
-        "language": "en",
-        "session_id": session_id,
-        "user_id": user_id,
-        "conversation_history": conversation_history or [],
-        "legal_domain": "general",
-        "needs_document": False,
-        "needs_research": True,
-        "needs_referral": False,
-        "is_emergency": False,
-        "emergency_type": "",
-        "research_results": [],
-        "kanoon_cases": [],
-        "ipc_sections": [],
-        "case_analysis": {},
-        "case_strength": "medium",
-        "draft_document": "",
-        "document_type": "",
-        "document_hindi": "",
-        "document_english": "",
-        "confidence_score": 0.0,
-        "hallucination_detected": False,
-        "human_approval_needed": False,
-        "verified_sources": [],
-        "dlsa_offices": [],
-        "lawyer_referrals": [],
-        "final_response": "",
-        "final_response_hindi": "",
-        "sources": [],
-        "next_steps": [],
-        "error": None,
-        "retry_count": 0,
-    }
+    state = initial_state(
+        user_query=query,
+        session_id=session_id,
+        user_id=user_id,
+        conversation_history=conversation_history or [],
+    )
 
-    result = await nyaymitra_graph.ainvoke(initial_state)
+    result = await nyaymitra_graph.ainvoke(state)
     return result

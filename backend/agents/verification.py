@@ -2,7 +2,7 @@
 Verification Agent - NyayMitra 2.0
 Checks confidence, detects hallucinations, adds disclaimers and sources.
 """
-from backend.state import NyayMitraState
+from backend.state import NyayMitraState, initial_state
 from backend.config import CONFIDENCE_THRESHOLD
 from backend.agents.schemas import VerificationOutput, to_state
 from langsmith import traceable
@@ -140,45 +140,20 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, '.')
 
-    test_state = {
-        "user_query": "My landlord has not returned security deposit of Rs 50000 after 3 months",
-        "language": "en",
-        "session_id": "test",
-        "user_id": "test",
-        "conversation_history": [],
-        "legal_domain": "property",
-        "needs_document": False,
-        "needs_research": True,
-        "needs_referral": False,
-        "is_emergency": False,
-        "emergency_type": "",
-        "research_results": [
+    test_state = initial_state(
+        user_query="My landlord has not returned security deposit of Rs 50000 after 3 months",
+        legal_domain="property",
+        requested_actions=["research"],
+        research_results=[
             {"content": "UP Urban Buildings Act - security deposit must be returned within 30 days"},
             {"content": "Section 406 IPC - Criminal breach of trust"}
         ],
-        "kanoon_cases": [
+        kanoon_cases=[
             {"title": "Ram vs Shyam 2020", "url": "https://indiankanoon.org/doc/123"}
         ],
-        "ipc_sections": [],
-        "case_analysis": {},
-        "case_strength": "medium",
-        "draft_document": "",
-        "document_type": "",
-        "document_hindi": "",
-        "document_english": "",
-        "confidence_score": 0.0,
-        "hallucination_detected": False,
-        "human_approval_needed": False,
-        "verified_sources": [],
-        "dlsa_offices": [],
-        "lawyer_referrals": [],
-        "final_response": "Based on UP Urban Buildings Act, landlord must return deposit within 30 days. Section 406 IPC applicable. Verify from official sources before citing in court.",
-        "final_response_hindi": "",
-        "sources": [],
-        "next_steps": ["Send legal notice", "File in Rent Control Court"],
-        "error": None,
-        "retry_count": 0,
-    }
+        final_response="Based on UP Urban Buildings Act, landlord must return deposit within 30 days. Section 406 IPC applicable. Verify from official sources before citing in court.",
+        next_steps=["Send legal notice", "File in Rent Control Court"],
+    )
 
     result = verification_agent(test_state)
     print("\n" + "=" * 60)

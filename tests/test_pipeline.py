@@ -8,46 +8,13 @@ from backend.agents.guardian import guardian_agent
 from backend.agents.orchestrator import orchestrator_agent
 from backend.agents.verification import verification_agent
 from backend.utils.language_detector import detect_language
-from backend.state import NyayMitraState
+from backend.state import NyayMitraState, initial_state
 
 
 def make_state(**kwargs) -> NyayMitraState:
-    base = {
-        "user_query": "",
-        "language": "en",
-        "session_id": "test-session",
-        "user_id": "test-user",
-        "conversation_history": [],
-        "legal_domain": "general",
-        "needs_document": False,
-        "needs_research": True,
-        "needs_referral": False,
-        "is_emergency": False,
-        "emergency_type": "",
-        "research_results": [],
-        "kanoon_cases": [],
-        "ipc_sections": [],
-        "case_analysis": {},
-        "case_strength": "medium",
-        "draft_document": "",
-        "document_type": "",
-        "document_hindi": "",
-        "document_english": "",
-        "confidence_score": 0.0,
-        "hallucination_detected": False,
-        "human_approval_needed": False,
-        "verified_sources": [],
-        "dlsa_offices": [],
-        "lawyer_referrals": [],
-        "final_response": "",
-        "final_response_hindi": "",
-        "sources": [],
-        "next_steps": [],
-        "error": None,
-        "retry_count": 0,
-    }
-    base.update(kwargs)
-    return base
+    kwargs.setdefault("session_id", "test-session")
+    kwargs.setdefault("user_id", "test-user")
+    return initial_state(**kwargs)
 
 
 # ─── Language Detection Tests ─────────────────────────────────────────────────
@@ -119,7 +86,7 @@ class TestOrchestratorAgent:
     def test_document_detection(self):
         state = make_state(user_query="Draft a legal notice for my landlord")
         result = orchestrator_agent(state)
-        assert result["needs_document"] == True
+        assert "drafting" in result["requested_actions"]
 
     def test_hindi_language_detection(self):
         state = make_state(user_query="मेरे मकान मालिक ने किराया नहीं लिया")
