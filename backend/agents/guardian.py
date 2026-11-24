@@ -5,6 +5,7 @@ Detects emergency/urgent cases and flags them for immediate legal action.
 Runs in parallel before any other agent.
 """
 from backend.state import NyayMitraState
+from backend.agents.schemas import GuardianOutput, to_state
 from langsmith import traceable
 from typing import Literal
 
@@ -245,22 +246,17 @@ def guardian_agent(state: NyayMitraState) -> dict:
         # Build lawyer-focused alert
         alert = build_lawyer_alert(emergency_type, urgency_level)
 
-        return {
-            "is_emergency": True,
-            "emergency_type": emergency_type,
-            "final_response": alert,
-            "confidence_score": 1.0,
-            "human_approval_needed": False,
-            "case_strength": "urgent",
-            # Note: Pipeline continues for full research
-            # Guardian just prepends urgency alert
-        }
+        return to_state(GuardianOutput(
+            is_emergency=True,
+            emergency_type=emergency_type,
+            final_response=alert,
+            confidence_score=1.0,
+            human_approval_needed=False,
+            case_strength="urgent",
+        ))
 
     # Normal case — no emergency
-    return {
-        "is_emergency": False,
-        "emergency_type": "",
-    }
+    return to_state(GuardianOutput(is_emergency=False, emergency_type=""))
 
 
 # ─── Test ─────────────────────────────────────────────────────────────────────

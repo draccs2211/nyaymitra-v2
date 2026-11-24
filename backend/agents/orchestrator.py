@@ -5,8 +5,12 @@ No hardcoded keywords — pure LLM-based classification.
 """
 from backend.state import NyayMitraState
 from backend.config import OPENAI_API_KEY
+from backend.agents.schemas import (
+    ClassificationLLMOutput, ClassificationMeta, OrchestratorOutput, to_state
+)
 from langsmith import traceable
 from openai import OpenAI
+from pydantic import ValidationError
 import json
 
 
@@ -89,38 +93,28 @@ Classify this query and return JSON."""
         )
 
         result_text = response.choices[0].message.content
-        result = json.loads(result_text)
+        result = ClassificationLLMOutput.model_validate(json.loads(result_text))
 
-        legal_domain = result.get("legal_domain", "general")
-        needs_document = result.get("needs_document", False)
-        needs_referral = result.get("needs_referral", False)
-        language = result.get("language", "en")
-        urgency = result.get("urgency", "low")
-        query_type = result.get("query_type", "general")
-        key_issues = result.get("key_issues", [])
-        suggested_acts = result.get("suggested_acts", [])
-        reasoning = result.get("reasoning", "")
+        print(f"[Orchestrator] Domain: {result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Doc: {result.needs_document}")
+        print(f"[Orchestrator] Reasoning: {result.reasoning}")
 
-        print(f"[Orchestrator] Domain: {legal_domain} | Lang: {language} | Urgency: {urgency} | Doc: {needs_document}")
-        print(f"[Orchestrator] Reasoning: {reasoning}")
+        return to_state(OrchestratorOutput(
+            legal_domain=result.legal_domain,
+            needs_document=result.needs_document,
+            needs_research=True,
+            needs_referral=result.needs_referral,
+            language=result.language,
+            case_analysis=ClassificationMeta(
+                urgency=result.urgency,
+                query_type=result.query_type,
+                key_issues=result.key_issues,
+                suggested_acts=result.suggested_acts,
+                reasoning=result.reasoning,
+            ),
+        ))
 
-        return {
-            "legal_domain": legal_domain,
-            "needs_document": needs_document,
-            "needs_research": True,
-            "needs_referral": needs_referral,
-            "language": language,
-            "case_analysis": {
-                "urgency": urgency,
-                "query_type": query_type,
-                "key_issues": key_issues,
-                "suggested_acts": suggested_acts,
-                "reasoning": reasoning
-            }
-        }
-
-    except json.JSONDecodeError as e:
-        print(f"[Orchestrator] JSON parse error: {e}")
+    except (json.JSONDecodeError, ValidationError) as e:
+        print(f"[Orchestrator] Invalid LLM output: {e}")
         return _fallback_classification(query)
 
     except Exception as e:
@@ -140,20 +134,18 @@ def _fallback_classification(query: str) -> dict:
 
     print("[Orchestrator] Using fallback classification")
 
-    return {
-        "legal_domain": "general",
-        "needs_document": False,
-        "needs_research": True,
-        "needs_referral": False,
-        "language": language,
-        "case_analysis": {
-            "urgency": "low",
-            "query_type": "general",
-            "key_issues": [],
-            "suggested_acts": [],
-            "reasoning": "Fallback classification used"
-        }
-    }
+    return to_state(OrchestratorOutput(
+        legal_domain="general",
+        needs_document=False,
+        needs_research=True,
+        needs_referral=False,
+        language=language,
+        case_analysis=ClassificationMeta(
+            urgency="low",
+            query_type="general",
+            reasoning="Fallback classification used",
+        ),
+    ))
 
 
 if __name__ == "__main__":
