@@ -1,5 +1,6 @@
 from backend.state import NyayMitraState
 from backend.config import OPENAI_API_KEY
+from backend.agents.schemas import AnalysisDetail, AnalysisOutput, to_state
 from langsmith import traceable
 from openai import OpenAI
 
@@ -82,17 +83,17 @@ Please provide a comprehensive legal analysis.
                 if clean and len(clean) > 10:
                     next_steps.append(clean)
 
-        return {
-            "case_analysis": {
-                "analysis": analysis_text,
-                "domain": domain,
-                "cases_found": len(kanoon_cases),
-                "rag_results": len(research_results)
-            },
-            "case_strength": case_strength,
-            "next_steps": next_steps[:5],
-            "final_response": analysis_text,
-        }
+        return to_state(AnalysisOutput(
+            case_analysis=AnalysisDetail(
+                analysis=analysis_text,
+                domain=domain,
+                cases_found=len(kanoon_cases),
+                rag_results=len(research_results),
+            ),
+            case_strength=case_strength,
+            next_steps=next_steps[:5],
+            final_response=analysis_text,
+        ))
 
     except Exception as e:
         fallback = f"""Based on your query about {domain} law:
@@ -104,9 +105,9 @@ Please provide a comprehensive legal analysis.
 
 Error: {str(e)}"""
 
-        return {
-            "case_analysis": {"analysis": fallback, "error": str(e)},
-            "case_strength": "medium",
-            "next_steps": ["Document everything", "Consult a lawyer", "Contact DLSA: 15100"],
-            "final_response": fallback,
-        }
+        return to_state(AnalysisOutput(
+            case_analysis=AnalysisDetail(analysis=fallback, error=str(e)),
+            case_strength="medium",
+            next_steps=["Document everything", "Consult a lawyer", "Contact DLSA: 15100"],
+            final_response=fallback,
+        ))

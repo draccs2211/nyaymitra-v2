@@ -81,3 +81,56 @@ class TestOrchestratorOutput:
         out = self._run(monkeypatch, "not json at all")
         assert out["case_analysis"]["reasoning"] == "Fallback classification used"
         schemas.OrchestratorOutput(**out)
+
+
+# ─── Research ─────────────────────────────────────────────────────────────────
+
+class TestResearchOutput:
+    def test_rag_results_validated(self, monkeypatch):
+        from backend.agents import research
+        docs = [
+            {"id": "act:abc", "content": "Section 406 IPC breach of trust",
+             "metadata": {"domain": "criminal"}, "score": 0.8, "source": "dense",
+             "rrf_score": 0.03},
+            {"id": "legal_guidance:def", "content": "Security deposit guidance",
+             "score": 2.1, "source": "sparse"},
+        ]
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: docs)
+        out = research.research_agent(make_state(user_query="deposit", legal_domain="property"))
+        assert [r["id"] for r in out["research_results"]] == ["act:abc", "legal_guidance:def"]
+        assert out["research_results"][1]["metadata"] == {}
+        assert "rrf_score" not in out["research_results"][1]   # None dropped
+        assert out["kanoon_cases"] == []
+        assert [s["id"] for s in out["ipc_sections"]] == ["act:abc"]
+        schemas.ResearchOutput(**out)
+
+    def test_kanoon_case_coerces_ids(self):
+        c = schemas.KanoonCase(title="X v Y", tid=12345, date=None)
+        assert c.tid == "12345" and c.date == ""
+        assert "verify" in c.source.lower()
+
+
+# ─── Analysis ─────────────────────────────────────────────────────────────────
+
+class TestAnalysisOutput:
+    def test_llm_success_validates(self, monkeypatch):
+        from backend.agents import analysis
+        text = "Applicable: Section 406 IPC.\n1. Send legal notice to landlord\n2. File in Rent Control Court"
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai(text))
+        out = analysis.analysis_agent(make_state(user_query="deposit", legal_domain="property"))
+        assert out["final_response"] == text
+        assert out["case_analysis"]["domain"] == "property"
+        assert "Send legal notice to landlord" in out["next_steps"]
+        schemas.AnalysisOutput(**out)
+
+    def test_llm_failure_fallback_validates(self, monkeypatch):
+        from backend.agents import analysis
+
+        class Boom:
+            def __init__(self, *a, **kw):
+                raise RuntimeError("api down")
+        monkeypatch.setattr(analysis, "OpenAI", Boom)
+        out = analysis.analysis_agent(make_state(user_query="q"))
+        assert out["case_analysis"]["error"] == "api down"
+        assert out["case_strength"] == "medium"
+        schemas.AnalysisOutput(**out)
