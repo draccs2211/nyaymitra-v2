@@ -17,6 +17,11 @@ def get_db():
         db.close()
 
 
+def get_db_factory():
+    """Session factory for work that outlives the request (background tasks)."""
+    return SessionLocal
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 

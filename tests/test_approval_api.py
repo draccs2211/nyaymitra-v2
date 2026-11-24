@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend import main
-from backend.database.connection import get_db
+from backend.database.connection import get_db, get_db_factory
 from backend.database.models import Base, Firm, User
 from backend.utils import cache
 from backend.utils.auth import create_access_token
@@ -35,6 +35,7 @@ def client(monkeypatch):
 
     monkeypatch.setattr(cache, "redis_client", FakeRedis())
     main.app.dependency_overrides[get_db] = _get_db
+    main.app.dependency_overrides[get_db_factory] = lambda: Session
     db = Session()
     firm_a, firm_b = Firm(name="A", email="a@firm"), Firm(name="B", email="b@firm")
     db.add_all([firm_a, firm_b]); db.flush()
@@ -52,6 +53,7 @@ def client(monkeypatch):
     tc = TestClient(main.app)
     tc.headers_for = lambda who: {"Authorization": f"Bearer {create_access_token({'sub': ids[who]})}"}
     tc.ids = ids
+    tc.Session = Session
     yield tc
     main.app.dependency_overrides.clear()
 

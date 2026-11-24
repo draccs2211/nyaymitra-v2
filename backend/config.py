@@ -23,7 +23,35 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost/nyaymitra")
 
 # Auth
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+# No fallback: a missing/weak key must stop the app (see require_secret_key()).
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+_PLACEHOLDER_SECRETS = {"your-secret-key-change-in-production", "changeme", "secret"}
+MIN_SECRET_KEY_LENGTH = 32
+
+
+def require_secret_key(key: str = None) -> str:
+    """Return the JWT signing key or raise if it is missing, short or a placeholder."""
+    key = SECRET_KEY if key is None else key
+    if not key or key in _PLACEHOLDER_SECRETS or len(key) < MIN_SECRET_KEY_LENGTH:
+        raise RuntimeError(
+            "SECRET_KEY must be set in .env to a random value of at least "
+            f"{MIN_SECRET_KEY_LENGTH} characters. Generate one with: "
+            'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    return key
+
+
+# CORS: comma-separated allowed origins (no wildcard)
+CORS_ORIGINS = [
+    o.strip() for o in os.getenv(
+        "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    ).split(",") if o.strip()
+]
+
+# Rate limits (requests per minute)
+RATE_LIMIT_AUTH_PER_MIN = int(os.getenv("RATE_LIMIT_AUTH_PER_MIN", "10"))
+RATE_LIMIT_QUERY_PER_MIN = int(os.getenv("RATE_LIMIT_QUERY_PER_MIN", "20"))
+RATE_LIMIT_APPROVAL_PER_MIN = int(os.getenv("RATE_LIMIT_APPROVAL_PER_MIN", "60"))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 

@@ -2,15 +2,20 @@ from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import timedelta
+import logging
+import re
 import uuid
 import time
-import os
 
-from backend.config import ACCESS_TOKEN_EXPIRE_MINUTES
-from backend.database.connection import get_db, init_db
+from backend.config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS,
+    RATE_LIMIT_APPROVAL_PER_MIN, RATE_LIMIT_AUTH_PER_MIN, RATE_LIMIT_QUERY_PER_MIN,
+)
+from backend.database.connection import get_db, get_db_factory, init_db
+from backend.utils.rate_limit import limit_by_ip, limit_by_user
 from backend.database.models import User, Firm, Case, Document, QueryLog
 from backend.utils.auth import (
     verify_password, get_password_hash,
@@ -27,6 +32,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger("nyaymitra.api")
+
 app = FastAPI(
     title="NyayMitra 2.0 API",
     description="AI-powered legal intelligence platform for Indian lawyers",
@@ -35,25 +42,45 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ORIGINS,          # explicit allow-list, never "*"
+    allow_credentials=False,             # bearer tokens in headers, no cookies
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
 # ─── Pydantic Models ────────────────────────────────────────────────────────
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class RegisterRequest(BaseModel):
-    name: str
-    email: str
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(max_length=254)
     password: str
-    firm_name: Optional[str] = None
+    firm_name: Optional[str] = Field(default=None, max_length=200)
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not _EMAIL_RE.match(v):
+            raise ValueError("invalid email address")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        # bcrypt only uses the first 72 bytes and errors beyond that
+        if len(v) < 8 or len(v.encode("utf-8")) > 72:
+            raise ValueError("password must be 8-72 bytes long")
+        return v
+
 
 class QueryRequest(BaseModel):
-    query: str
-    session_id: Optional[str] = None
-    case_id: Optional[str] = None
+    query: str = Field(min_length=1, max_length=4000)
+    session_id: Optional[str] = Field(default=None, max_length=100)
+    case_id: Optional[str] = Field(default=None, max_length=100)
 
 class QueryResponse(BaseModel):
     session_id: str
@@ -83,7 +110,7 @@ class ApprovalRequest(BaseModel):
 
 
 class CreateCaseRequest(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=300)
     legal_domain: Optional[str] = "general"
     notes: Optional[str] = ""
 
@@ -160,7 +187,8 @@ async def health():
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
 
-@app.post("/api/auth/register", response_model=TokenResponse)
+@app.post("/api/auth/register", response_model=TokenResponse,
+          dependencies=[Depends(limit_by_ip("register", RATE_LIMIT_AUTH_PER_MIN))])
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     # Check if email exists
     existing = db.query(User).filter(User.email == request.email).first()
@@ -199,12 +227,13 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post("/api/auth/login", response_model=TokenResponse,
+          dependencies=[Depends(limit_by_ip("login", RATE_LIMIT_AUTH_PER_MIN))])
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == form_data.username).first()
+    user = db.query(User).filter(User.email == form_data.username.strip().lower()).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -241,10 +270,13 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def process_query(
     request: QueryRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(limit_by_user("query", RATE_LIMIT_QUERY_PER_MIN)),
+    db: Session = Depends(get_db),
+    db_factory=Depends(get_db_factory),
 ):
     start_time = time.time()
+    if request.case_id:
+        get_owned_case(db, request.case_id, current_user)   # 404 if not the user's case
     session_id = request.session_id or str(uuid.uuid4())
 
     # Get conversation history from session
@@ -267,8 +299,9 @@ async def process_query(
             user_id=current_user.id,
             conversation_history=conversation_history
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
+    except Exception:
+        logger.exception("Pipeline failed (user=%s session=%s)", current_user.id, session_id)
+        raise HTTPException(status_code=500, detail="Internal error while processing the query")
 
     response_time = int((time.time() - start_time) * 1000)
 
@@ -284,7 +317,7 @@ async def process_query(
 
     # Log query in background
     background_tasks.add_task(
-        log_query, db, current_user.id, request.case_id,
+        log_query, db_factory, current_user.id, request.case_id,
         request.query, language, result, response_time
     )
 
@@ -312,7 +345,7 @@ async def _load_run_for(run_id: str, current_user: User, db: Session, *, review:
 @app.get("/api/approvals/{run_id}", response_model=QueryResponse)
 async def get_approval(
     run_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
     db: Session = Depends(get_db)
 ):
     """View a run's response and approval status (requester or eligible reviewer)."""
@@ -324,7 +357,7 @@ async def get_approval(
 async def decide_approval(
     run_id: str,
     request: ApprovalRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
     db: Session = Depends(get_db)
 ):
     """Approve or reject a pending run (eligible reviewer only)."""
@@ -345,7 +378,9 @@ async def decide_approval(
     return _to_response(result, result.get("session_id", ""), 0)
 
 
-def log_query(db, user_id, case_id, query, language, result, response_time):
+def log_query(db_factory, user_id, case_id, query, language, result, response_time):
+    """Background task: opens its own session (the request's is closed by now)."""
+    db = db_factory()
     try:
         log = QueryLog(
             user_id=user_id,
@@ -360,7 +395,18 @@ def log_query(db, user_id, case_id, query, language, result, response_time):
         db.add(log)
         db.commit()
     except Exception:
-        pass
+        db.rollback()
+        logger.exception("Failed to write query log (user=%s)", user_id)
+    finally:
+        db.close()
+
+
+def get_owned_case(db: Session, case_id: str, user: User) -> Case:
+    """The user's own case, or 404 (never 403: don't reveal other users' cases)."""
+    case = db.query(Case).filter(Case.id == case_id, Case.user_id == user.id).first()
+    if case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return case
 
 
 # ─── Case Routes ──────────────────────────────────────────────────────────────
@@ -412,13 +458,7 @@ async def get_case(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    case = db.query(Case).filter(
-        Case.id == case_id,
-        Case.user_id == current_user.id
-    ).first()
-
-    if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+    case = get_owned_case(db, case_id, current_user)
 
     return {
         "id": case.id,
@@ -439,6 +479,7 @@ async def get_documents(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    get_owned_case(db, case_id, current_user)
     docs = db.query(Document).filter(
         Document.case_id == case_id,
         Document.user_id == current_user.id

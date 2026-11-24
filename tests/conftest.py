@@ -14,6 +14,8 @@ import pytest
 
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGSMITH_TRACING"] = "false"
+# Test-only JWT key (forced, so tests never sign with the real one from .env)
+os.environ["SECRET_KEY"] = "test-only-secret-key-" + "x" * 40
 
 _LLM_MODULES = (
     "backend.agents.guardian",
@@ -26,6 +28,14 @@ _LLM_MODULES = (
 class _BlockedOpenAI:
     def __init__(self, *args, **kwargs):
         raise RuntimeError("Unmocked OpenAI call in a non-paid test — mock it or mark the test @pytest.mark.paid")
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    from backend.utils.rate_limit import limiter
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture(autouse=True)
