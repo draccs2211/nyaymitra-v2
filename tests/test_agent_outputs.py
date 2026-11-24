@@ -11,16 +11,47 @@ from backend.agents import schemas
 from tests.test_pipeline import make_state
 
 
-def fake_openai(content: str):
-    """Return an OpenAI-like class whose chat completion yields `content`."""
+def fake_openai(content):
+    """
+    OpenAI-like class. `content` is the reply string, or a callable that
+    receives the create(**kwargs) and returns the reply string.
+    """
+    def create(**kw):
+        text = content(kw) if callable(content) else content
+        msg = SimpleNamespace(content=text)
+        return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+
     class _Client:
         def __init__(self, *a, **kw):
-            msg = SimpleNamespace(content=content)
-            resp = SimpleNamespace(choices=[SimpleNamespace(message=msg)])
-            self.chat = SimpleNamespace(
-                completions=SimpleNamespace(create=lambda **kw: resp)
-            )
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
     return _Client
+
+
+EXTRACTED = {
+    "document_type": "legal_notice",
+    "client_name": "Ramesh Kumar", "client_address": "12 MG Road, Lucknow",
+    "opposite_party_name": "Suresh Gupta", "opposite_party_address": None,
+    "facts": "Client vacated the flat 3 months ago; deposit of Rs 50,000 not returned.",
+    "relief_sought": "Return of Rs 50,000 security deposit", "amount": "50000",
+}
+DRAFTED = {
+    "english": "LEGAL NOTICE\nTo Suresh Gupta, [Opposite Party Address]. Under Section 406 IPC ...",
+    "hindi": "कानूनी नोटिस\nसुरेश गुप्ता, [विपक्षी का पता]। धारा 406 के अंतर्गत ...",
+}
+
+
+def mock_drafting(monkeypatch, extraction=EXTRACTED, draft=DRAFTED):
+    """Mock the drafting agent's two LLM calls (extraction, then drafting).
+    Pass an Exception instance to make that call fail."""
+    from backend.agents import drafting
+
+    def reply(kw):
+        system = kw["messages"][0]["content"]
+        out = extraction if system == drafting.EXTRACTION_PROMPT else draft
+        if isinstance(out, Exception):
+            raise out
+        return out if isinstance(out, str) else json.dumps(out)
+    monkeypatch.setattr(drafting, "OpenAI", fake_openai(reply))
 
 
 # ─── Guardian ─────────────────────────────────────────────────────────────────
@@ -149,19 +180,112 @@ class TestAnalysisOutput:
 
 # ─── Drafting / Referral / Verification ──────────────────────────────────────
 
+RESEARCH = [{"id": "ipc_section:1", "content": "Section 406 IPC / Section 316 BNS - Criminal breach of trust"}]
+
+
 class TestDraftingOutput:
-    @pytest.mark.parametrize("query,lang,expected", [
-        ("Draft legal notice to landlord", "en", "legal_notice"),
-        ("RTI application for scheme status", "en", "rti_application"),
-        ("मकान मालिक को कानूनी नोटिस", "hi", "legal_notice"),
-    ])
-    def test_validates(self, query, lang, expected):
+    def test_llm_draft_with_extracted_fields(self, monkeypatch):
         from backend.agents.drafting import drafting_agent
-        out = drafting_agent(make_state(user_query=query, language=lang))
-        assert out["document_type"] == expected
-        expected_draft = out["document_hindi"] if lang == "hi" else out["document_english"]
-        assert out["draft_document"] == expected_draft
+        mock_drafting(monkeypatch)
+        out = drafting_agent(make_state(user_query="draft notice", research_results=RESEARCH))
+        assert out["draft_method"] == "llm"
+        assert out["document_type"] == "legal_notice"
+        assert out["draft_document"] == DRAFTED["english"]
+        assert out["draft_missing_fields"] == ["opposite_party_address"]
+        assert out["draft_unverified_citations"] == []      # 406 is in research
         schemas.DraftingOutput(**out)
+
+    def test_hindi_language_selects_hindi(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch)
+        out = drafting_agent(make_state(user_query="नोटिस", language="hi", research_results=RESEARCH))
+        assert out["draft_document"] == DRAFTED["hindi"]
+
+    def test_invented_citation_flagged(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch, draft={
+            "english": "Notice under Section 420 IPC and Section 406 IPC, see also Article 21.",
+            "hindi": "धारा 420 और धारा 406 के अंतर्गत नोटिस, अनुच्छेद 21 भी देखें।",
+        })
+        out = drafting_agent(make_state(user_query="draft notice", research_results=RESEARCH))
+        assert out["draft_unverified_citations"] == ["21", "420"]
+
+    def test_rti_template_provision_allowed(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch,
+                      extraction={"document_type": "rti_application", "facts": "status of PMAY application"},
+                      draft={"english": "Application under Section 6(1) of the RTI Act, 2005 ...",
+                             "hindi": "सूचना का अधिकार अधिनियम की धारा 6(1) के अंतर्गत आवेदन ..."})
+        out = drafting_agent(make_state(user_query="RTI for PMAY"))
+        assert out["document_type"] == "rti_application"
+        assert out["draft_unverified_citations"] == []
+
+    def test_drafting_failure_falls_back_to_template(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch, draft=RuntimeError("api down"))
+        out = drafting_agent(make_state(user_query="draft notice"))
+        assert out["draft_method"] == "template_fallback"
+        assert "Ramesh Kumar" in out["document_english"]           # extracted value used
+        assert "[Opposite Party Address]" in out["document_english"]  # missing kept as placeholder
+        assert "{" not in out["document_english"]                 # no unfilled template keys
+        schemas.DraftingOutput(**out)
+
+    def test_total_failure_gives_placeholder_template(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent, REQUIRED_FIELDS
+        mock_drafting(monkeypatch, extraction=RuntimeError("down"), draft=RuntimeError("down"))
+        out = drafting_agent(make_state(user_query="draft notice"))
+        assert out["draft_method"] == "template_fallback"
+        assert out["document_type"] == "legal_notice"
+        assert out["draft_missing_fields"] == REQUIRED_FIELDS["legal_notice"]
+        assert "[Client Name]" in out["document_english"]
+
+    def test_short_llm_draft_rejected(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch, draft={"english": "ok", "hindi": "ok"})
+        out = drafting_agent(make_state(user_query="draft notice"))
+        assert out["draft_method"] == "template_fallback"
+
+    def test_other_document_type_fallback(self, monkeypatch):
+        from backend.agents.drafting import drafting_agent
+        mock_drafting(monkeypatch,
+                      extraction={"document_type": "affidavit", "document_title": "Affidavit of residence"},
+                      draft=RuntimeError("down"))
+        out = drafting_agent(make_state(user_query="draft affidavit"))
+        assert out["document_type"] == "other"
+        assert "AFFIDAVIT OF RESIDENCE" in out["document_english"]
+
+    def test_date_is_current_not_import_time(self, monkeypatch):
+        from backend.agents import drafting
+        monkeypatch.setattr(drafting, "_today", lambda: "01/01/2030")
+        mock_drafting(monkeypatch, draft=RuntimeError("down"))
+        out = drafting.drafting_agent(make_state(user_query="draft notice"))
+        assert "01/01/2030" in out["document_english"]
+
+
+class TestDraftFields:
+    @pytest.mark.parametrize("raw", ["", "  ", "null", "Unknown", "N/A", None])
+    def test_blank_markers_become_none(self, raw):
+        assert schemas.DraftFields(client_name=raw).client_name is None
+
+    def test_unknown_doc_type_becomes_other(self):
+        assert schemas.DraftFields(document_type="Affidavit").document_type == "other"
+
+    def test_doc_type_normalized(self):
+        assert schemas.DraftFields(document_type=" RTI_Application ").document_type == "rti_application"
+
+    def test_numbers_coerced_to_str(self):
+        assert schemas.DraftFields(amount=50000).amount == "50000"
+
+
+class TestCitationGuard:
+    def test_hindi_and_english_forms(self):
+        from backend.agents.drafting import find_unverified_citations
+        ctx = "Section 498A IPC; धारा 125"
+        assert find_unverified_citations(["section 498a and धारा 125 and s. 302"], ctx) == ["302"]
+
+    def test_subsections_match_base(self):
+        from backend.agents.drafting import find_unverified_citations
+        assert find_unverified_citations(["Section 6(1)"], "Section 6(1) of RTI") == []
 
 
 class TestReferralOutput:
@@ -234,6 +358,7 @@ class TestPipelineWithSchemas:
             "suggested_acts": ["UP Rent Act"],
         })))
         monkeypatch.setattr(analysis, "OpenAI", analysis_llm("Analysis text " * 30))
+        mock_drafting(monkeypatch)
         monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
             {"id": "act:1", "content": "Section 406 IPC", "metadata": {"domain": "criminal"}},
         ])

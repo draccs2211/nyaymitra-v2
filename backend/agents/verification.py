@@ -101,6 +101,9 @@ def verification_agent(state: NyayMitraState) -> dict:
     citations_in_response = check_citation_format(final_response)
     if citations_in_response and not kanoon_cases and not research_results:
         hallucination_detected = True
+    # Draft cites provisions that aren't in the retrieved legal context
+    if state.get("draft_unverified_citations"):
+        hallucination_detected = True
         confidence = min(confidence, 0.55)
 
     # Build sources

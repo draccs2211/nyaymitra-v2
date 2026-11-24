@@ -22,7 +22,7 @@ CaseStrength = Literal["weak", "medium", "strong", "urgent"]
 ApprovalStatus = Literal["not_required", "pending", "approved", "rejected"]
 DocumentType = Literal[
     "legal_notice", "rti_application", "consumer_complaint",
-    "police_complaint", "vakalatnama",
+    "police_complaint", "vakalatnama", "other",
 ]
 
 
@@ -177,11 +177,59 @@ class AnalysisOutput(_Base):
 
 # ─── Drafting ─────────────────────────────────────────────────────────────────
 
+_EMPTY_MARKERS = {"", "null", "none", "n/a", "na", "unknown", "not provided", "not mentioned"}
+
+
+class DraftFields(BaseModel):
+    """Facts extracted from the query by the LLM. None = not stated (never guessed)."""
+    model_config = ConfigDict(extra="ignore")
+
+    document_type: DocumentType = "legal_notice"
+    document_title: str = ""
+    client_name: Optional[str] = None
+    client_address: Optional[str] = None
+    client_phone: Optional[str] = None
+    opposite_party_name: Optional[str] = None
+    opposite_party_address: Optional[str] = None
+    authority_name: Optional[str] = None       # police station / PIO dept / forum / court
+    authority_address: Optional[str] = None
+    subject: Optional[str] = None
+    facts: Optional[str] = None
+    relief_sought: Optional[str] = None
+    amount: Optional[str] = None
+    incident_date: Optional[str] = None
+    incident_location: Optional[str] = None
+
+    @field_validator("document_type", mode="before")
+    @classmethod
+    def _doc_type(cls, v):
+        return _coerce_choice(v, get_args(DocumentType), "other")
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _blank_to_none(cls, v, info):
+        if info.field_name in ("document_type", "document_title"):
+            return v if v is not None else ""
+        if v is None:
+            return None
+        v = str(v).strip()
+        return None if v.lower() in _EMPTY_MARKERS else v
+
+
+class DraftLLMOutput(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    english: str = Field(min_length=20)
+    hindi: str = Field(min_length=20)
+
+
 class DraftingOutput(_Base):
     draft_document: str
     document_type: DocumentType
     document_hindi: str
     document_english: str
+    draft_missing_fields: List[str] = Field(default_factory=list)
+    draft_unverified_citations: List[str] = Field(default_factory=list)
+    draft_method: Literal["llm", "template_fallback"]
 
 
 # ─── Referral ─────────────────────────────────────────────────────────────────

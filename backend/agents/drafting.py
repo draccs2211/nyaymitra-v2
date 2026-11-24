@@ -1,12 +1,19 @@
 """
 Drafting Agent - NyayMitra 2.0
-Generates legal documents using templates.
-Upgrade planned: OpenAI-based intelligent drafting after testing.
+1. LLM extracts document type + stated facts (never guessed; missing -> placeholder)
+2. LLM drafts English + Hindi using the reviewed templates as format reference,
+   citing only provisions present in the research context
+3. Citation guard flags provisions not found in that context
+Falls back to deterministic template filling if the LLM fails.
 """
 from backend.state import NyayMitraState, initial_state
-from backend.agents.schemas import DraftingOutput, to_state
+from backend.config import OPENAI_API_KEY
+from backend.agents.schemas import DraftFields, DraftingOutput, DraftLLMOutput, to_state
 from langsmith import traceable
+from openai import OpenAI
 from datetime import datetime
+import json
+import re
 
 
 DOCUMENT_TEMPLATES = {
@@ -264,14 +271,13 @@ Date: {date}"""
 }
 
 
-DEFAULT_VALUES = {
-    "date": datetime.now().strftime("%d/%m/%Y"),
+PLACEHOLDERS = {
     "sender_name": "[Client Name]",
     "sender_address": "[Client Address]",
     "sender_phone": "[Client Phone]",
     "recipient_name": "[Opposite Party Name]",
     "recipient_address": "[Opposite Party Address]",
-    "subject": "[Subject of Notice]",
+    "subject": "[Subject]",
     "facts": "[Describe the facts of the case in detail]",
     "relief": "[State what action you want them to take]",
     "days": "15",
@@ -283,6 +289,7 @@ DEFAULT_VALUES = {
     "information_requested": "[Describe the specific information you need]",
     "complainant_name": "[Complainant Name]",
     "complainant_address": "[Complainant Address]",
+    "complainant_phone": "[Complainant Phone]",
     "opposite_party": "[Opposite Party Name]",
     "opposite_address": "[Opposite Party Address]",
     "complaint_details": "[Describe your complaint in detail]",
@@ -302,35 +309,79 @@ DEFAULT_VALUES = {
     "case_details": "[Case Title and Number]",
 }
 
+# template placeholder -> DraftFields attribute (fallback filling)
+FIELD_MAP = {
+    "sender_name": "client_name", "sender_address": "client_address", "sender_phone": "client_phone",
+    "applicant_name": "client_name", "applicant_address": "client_address", "applicant_phone": "client_phone",
+    "complainant_name": "client_name", "complainant_address": "client_address", "complainant_phone": "client_phone",
+    "client_name": "client_name", "client_address": "client_address",
+    "recipient_name": "opposite_party_name", "recipient_address": "opposite_party_address",
+    "opposite_party": "opposite_party_name", "opposite_address": "opposite_party_address",
+    "accused_name": "opposite_party_name",
+    "department_name": "authority_name", "department_address": "authority_address",
+    "forum_name": "authority_name", "forum_address": "authority_address",
+    "police_station": "authority_name", "court_name": "authority_name",
+    "subject": "subject", "case_details": "subject",
+    "facts": "facts", "information_requested": "facts", "complaint_details": "facts",
+    "incident_details": "facts",
+    "relief": "relief_sought", "relief_sought": "relief_sought",
+    "incident_date": "incident_date", "incident_location": "incident_location",
+}
 
-def identify_document_type(query: str, domain: str) -> str:
-    query_lower = query.lower()
+# Facts a lawyer must supply before the document can be sent
+REQUIRED_FIELDS = {
+    "legal_notice": ["client_name", "client_address", "opposite_party_name",
+                     "opposite_party_address", "facts", "relief_sought"],
+    "rti_application": ["client_name", "client_address", "authority_name", "facts"],
+    "consumer_complaint": ["client_name", "client_address", "opposite_party_name",
+                           "opposite_party_address", "authority_name", "facts", "relief_sought"],
+    "police_complaint": ["client_name", "client_address", "authority_name",
+                         "incident_date", "incident_location", "facts"],
+    "vakalatnama": ["client_name", "client_address", "authority_name", "subject"],
+    "other": ["client_name", "facts"],
+}
 
-    if any(kw in query_lower for kw in [
-        "rti", "right to information", "suchna adhikar",
-        "government information", "public information"
-    ]):
-        return "rti_application"
+EXTRACTION_PROMPT = """You extract facts for drafting an Indian legal document.
 
-    if any(kw in query_lower for kw in [
-        "consumer", "product defect", "refund", "service issue",
-        "consumer forum", "consumer court"
-    ]):
-        return "consumer_complaint"
+Return JSON with exactly these keys:
+{
+  "document_type": "<one of: legal_notice, rti_application, consumer_complaint, police_complaint, vakalatnama, other>",
+  "document_title": "<short title if document_type is other, else empty>",
+  "client_name": null, "client_address": null, "client_phone": null,
+  "opposite_party_name": null, "opposite_party_address": null,
+  "authority_name": "<police station / public authority / consumer forum / court, if stated>",
+  "authority_address": null,
+  "subject": null, "facts": "<facts stated by the user, in neutral third person>",
+  "relief_sought": null, "amount": null, "incident_date": null, "incident_location": null
+}
 
-    if any(kw in query_lower for kw in [
-        "fir", "police complaint", "police station", "thana",
-        "first information report"
-    ]):
-        return "police_complaint"
+Rules:
+- Use ONLY information explicitly present in the query or conversation. If a value is not stated, use null.
+- NEVER invent names, addresses, phone numbers, dates, amounts or authorities.
+- Pick document_type from what the user asks to draft; use "other" (with document_title) if none fits.
+Return ONLY JSON."""
 
-    if any(kw in query_lower for kw in [
-        "vakalatnama", "appoint lawyer", "authorize advocate",
-        "power of attorney"
-    ]):
-        return "vakalatnama"
+DRAFTING_PROMPT = """You are drafting an Indian legal document for review by a lawyer.
 
-    return "legal_notice"
+Return JSON: {"english": "<full document in formal English>", "hindi": "<the same document in formal Hindi (Devanagari)>"}
+
+Rules:
+- Follow the structure of the FORMAT REFERENCE when one is given.
+- Use only the facts in EXTRACTED FIELDS. Where a field is null, keep a bracketed placeholder such as [Client Name] - never invent it.
+- Keep EVERY line of the format reference (addresses, phone, signature, etc.). Never drop a line because its value is unknown - write the placeholder, e.g. [Opposite Party Address], [Client Phone].
+- Cite statutory provisions ONLY if they appear in ALLOWED LEGAL CONTEXT. If none fit, cite none. Never cite case law.
+- Do not state conclusions about case strength or likely outcome.
+- Use today's date given below.
+Return ONLY JSON."""
+
+_CITE_RE = re.compile(
+    r"(?:section|sec\.|s\.|धारा|article|अनुच्छेद)\s*(\d+[A-Z]?)(?:\(\d+\))?",
+    re.IGNORECASE,
+)
+
+
+def _today() -> str:
+    return datetime.now().strftime("%d/%m/%Y")
 
 
 def fill_template(template: str, values: dict) -> str:
@@ -340,41 +391,119 @@ def fill_template(template: str, values: dict) -> str:
     return result
 
 
+def cited_numbers(text: str) -> set:
+    return {m.upper() for m in _CITE_RE.findall(text or "")}
+
+
+def find_unverified_citations(draft_texts: list, allowed_context: str) -> list:
+    """Provision numbers cited in the draft that never appear in the allowed context."""
+    allowed = cited_numbers(allowed_context)
+    cited = set()
+    for t in draft_texts:
+        cited |= cited_numbers(t)
+    return sorted(cited - allowed)
+
+
+def _allowed_context(state: NyayMitraState, doc_type: str) -> str:
+    parts = [r.get("content", "") for r in state.get("research_results", [])]
+    parts += [r.get("content", "") for r in state.get("ipc_sections", [])]
+    tmpl = DOCUMENT_TEMPLATES.get(doc_type)
+    if tmpl:  # curated templates may cite their own enabling provision (e.g. RTI s.6(1))
+        parts += [tmpl["english"], tmpl["hindi"]]
+    return "\n".join(p for p in parts if p)
+
+
+def _llm_json(system: str, user: str, max_tokens: int) -> dict:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        max_tokens=max_tokens,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+def extract_fields(state: NyayMitraState) -> DraftFields:
+    history = state.get("conversation_history", [])[-4:]
+    convo = "\n".join(f"{m['role'].upper()}: {m['content'][:300]}" for m in history)
+    user = f"Query: {state.get('user_query', '')}\n"
+    if convo:
+        user += f"\nRecent conversation:\n{convo}\n"
+    return DraftFields.model_validate(_llm_json(EXTRACTION_PROMPT, user, 700))
+
+
+def missing_fields(fields: DraftFields) -> list:
+    return [f for f in REQUIRED_FIELDS.get(fields.document_type, []) if getattr(fields, f) is None]
+
+
+def template_fallback(fields: DraftFields) -> tuple:
+    """Deterministic fill of the reviewed template with whatever was extracted."""
+    values = dict(PLACEHOLDERS, date=_today())
+    for key, attr in FIELD_MAP.items():
+        val = getattr(fields, attr)
+        if val is not None:
+            values[key] = val
+    tmpl = DOCUMENT_TEMPLATES.get(fields.document_type)
+    if tmpl is None:  # "other": no reviewed template - minimal skeleton
+        title = fields.document_title or "[Document Title]"
+        body = (f"{title.upper()}\n\nDate: {values['date']}\n\n"
+                f"{values['facts']}\n\nRelief sought: {values['relief_sought']}\n\n"
+                f"{values['client_name']}\n{values['client_address']}")
+        return body, body
+    return fill_template(tmpl["english"], values), fill_template(tmpl["hindi"], values)
+
+
 @traceable(name="Drafting Agent")
 def drafting_agent(state: NyayMitraState) -> dict:
-    query = state.get("user_query", "")
-    domain = state.get("legal_domain", "general")
     language = state.get("language", "en")
 
-    # Identify document type
-    doc_type = identify_document_type(query, domain)
-
-    # Get template
-    template = DOCUMENT_TEMPLATES.get(doc_type, DOCUMENT_TEMPLATES["legal_notice"])
-
-    # Fill with default values
-    values = DEFAULT_VALUES.copy()
-
-    # Fill documents
+    # 1. Field extraction (LLM). On failure we still draft a placeholder template.
     try:
-        doc_hindi = fill_template(template["hindi"], values)
-    except Exception:
-        doc_hindi = template["hindi"]
+        fields = extract_fields(state)
+    except Exception as e:
+        print(f"[Drafting] Extraction failed: {e}")
+        fields = DraftFields()
 
+    doc_type = fields.document_type
+    allowed = _allowed_context(state, doc_type)
+    tmpl = DOCUMENT_TEMPLATES.get(doc_type)
+
+    # 2. Drafting (LLM)
+    method = "llm"
     try:
-        doc_english = fill_template(template["english"], values)
-    except Exception:
-        doc_english = template["english"]
+        analysis = (state.get("case_analysis") or {}).get("analysis", "")[:1500]
+        title = f" ({fields.document_title})" if fields.document_title else ""
+        user = (
+            f"Today's date: {_today()}\n"
+            f"Document type: {doc_type}{title}\n\n"
+            f"EXTRACTED FIELDS:\n{fields.model_dump_json(indent=1)}\n\n"
+            f"FORMAT REFERENCE:\n{tmpl['english'] if tmpl else '(none - use standard Indian format)'}\n\n"
+            f"ALLOWED LEGAL CONTEXT:\n{allowed[:4000] or '(none)'}\n\n"
+            f"LEGAL ANALYSIS (for context, do not copy conclusions):\n{analysis or '(none)'}"
+        )
+        draft = DraftLLMOutput.model_validate(_llm_json(DRAFTING_PROMPT, user, 3500))
+        doc_english, doc_hindi = draft.english, draft.hindi
+    except Exception as e:
+        print(f"[Drafting] LLM drafting failed, using template: {e}")
+        method = "template_fallback"
+        doc_english, doc_hindi = template_fallback(fields)
 
-    draft = doc_hindi if language == "hi" else doc_english
+    unverified = find_unverified_citations([doc_english, doc_hindi], allowed)
+    missing = missing_fields(fields)
+    draft_doc = doc_hindi if language == "hi" else doc_english
 
-    print(f"[Drafting] Document type: {doc_type} | Language: {language}")
+    print(f"[Drafting] type={doc_type} method={method} missing={missing} unverified={unverified}")
 
     return to_state(DraftingOutput(
-        draft_document=draft,
+        draft_document=draft_doc,
         document_type=doc_type,
         document_hindi=doc_hindi,
         document_english=doc_english,
+        draft_missing_fields=missing,
+        draft_unverified_citations=unverified,
+        draft_method=method,
     ))
 
 

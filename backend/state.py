@@ -34,6 +34,9 @@ class NyayMitraState(TypedDict):
     document_type: str
     document_hindi: str
     document_english: str
+    draft_missing_fields: List[str]        # facts the lawyer must fill in
+    draft_unverified_citations: List[str]  # provisions cited but not in research context
+    draft_method: str                      # llm / template_fallback
 
     # Verification
     confidence_score: float
@@ -82,6 +85,9 @@ def initial_state(**overrides) -> NyayMitraState:
         "document_type": "",
         "document_hindi": "",
         "document_english": "",
+        "draft_missing_fields": [],
+        "draft_unverified_citations": [],
+        "draft_method": "",
         "confidence_score": 0.0,
         "hallucination_detected": False,
         "human_approval_needed": False,

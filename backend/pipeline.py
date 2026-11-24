@@ -66,6 +66,8 @@ def human_approval_node(state: NyayMitraState) -> dict:
         "final_response": state.get("final_response", ""),
         "draft_document": state.get("draft_document", ""),
         "document_type": state.get("document_type", ""),
+        "draft_missing_fields": state.get("draft_missing_fields", []),
+        "draft_unverified_citations": state.get("draft_unverified_citations", []),
         "confidence_score": state.get("confidence_score", 0.0),
         "hallucination_detected": state.get("hallucination_detected", False),
         "verified_sources": state.get("verified_sources", []),

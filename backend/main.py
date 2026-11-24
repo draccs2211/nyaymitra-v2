@@ -68,6 +68,8 @@ class QueryResponse(BaseModel):
     document_english: Optional[str] = None
     is_emergency: bool
     human_approval_needed: bool
+    missing_fields: List[str] = []          # facts the lawyer must fill into the draft
+    unverified_citations: List[str] = []    # provisions in draft not found in research
     run_id: Optional[str] = None
     approval_status: str = "not_required"   # not_required / pending / approved / rejected
     response_time_ms: int
@@ -104,6 +106,8 @@ def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryR
         document_english=result.get("document_english"),
         is_emergency=result.get("is_emergency", False),
         human_approval_needed=result.get("human_approval_needed", False),
+        missing_fields=result.get("draft_missing_fields", []),
+        unverified_citations=result.get("draft_unverified_citations", []),
         run_id=result.get("run_id"),
         approval_status=result.get("approval_status", "not_required"),
         response_time_ms=response_time_ms,
