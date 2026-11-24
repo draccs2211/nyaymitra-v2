@@ -18,12 +18,6 @@ import asyncio
 import uuid
 
 
-def check_emergency(state: NyayMitraState) -> Literal["emergency", "normal"]:
-    if state.get("is_emergency", False):
-        return "emergency"
-    return "normal"
-
-
 def _wants(state: NyayMitraState, action: str) -> bool:
     return action in (state.get("requested_actions") or ["research"])
 
@@ -111,15 +105,8 @@ def build_graph(checkpointer=None):
     # Entry point
     workflow.set_entry_point("guardian")
 
-    # Guardian → emergency or normal
-    workflow.add_conditional_edges(
-        "guardian",
-        check_emergency,
-        {
-            "emergency": END,
-            "normal": "orchestrator"
-        }
-    )
+    # Guardian flags urgency; pipeline always continues
+    workflow.add_edge("guardian", "orchestrator")   # emergencies continue too
 
     # Orchestrator → research or referral only
     workflow.add_conditional_edges(

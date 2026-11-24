@@ -16,6 +16,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGSMITH_TRACING"] = "false"
 
 _LLM_MODULES = (
+    "backend.agents.guardian",
     "backend.agents.orchestrator",
     "backend.agents.analysis",
     "backend.agents.drafting",

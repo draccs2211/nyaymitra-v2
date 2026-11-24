@@ -115,6 +115,11 @@ def verification_agent(state: NyayMitraState) -> dict:
 
     enhanced_response = final_response + (disclaimer_hi if language == "hi" else disclaimer_en)
 
+    # Guardian's urgent alert goes first so it can't be missed
+    urgent_alert = state.get("urgent_alert", "")
+    if urgent_alert:
+        enhanced_response = urgent_alert + "\n\n" + enhanced_response
+
     # Add sources
     if sources:
         sources_text = "\n\n📚 Sources:\n" + "\n".join(f"• {s}" for s in sources)

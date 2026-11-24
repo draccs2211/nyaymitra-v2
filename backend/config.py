@@ -35,27 +35,12 @@ RERANK_TOP_K = 5
 
 # Confidence
 CONFIDENCE_THRESHOLD = 0.70
-EMERGENCY_THRESHOLD = 0.85
 
 # Cache TTL (seconds)
 QUERY_CACHE_TTL = 86400       # 24 hours
 EMBEDDING_CACHE_TTL = 604800  # 7 days
 LLM_CACHE_TTL = 43200         # 12 hours
 KANOON_CACHE_TTL = 86400      # 24 hours
-
-# Emergency keywords
-EMERGENCY_KEYWORDS_HI = [
-    "maar raha", "maar rahi", "jaan ka khatra", "jaan lene",
-    "domestic violence", "gharelu hinsa", "rape", "balatkaar",
-    "kidnapping", "apaharan", "immediate threat", "turant khatra",
-    "suicide", "aatmahatya", "help me", "bachao", "mujhe bachao"
-]
-
-EMERGENCY_KEYWORDS_EN = [
-    "killing me", "threat to life", "domestic violence",
-    "rape", "kidnapping", "immediate danger", "help me",
-    "suicide", "assault", "physical abuse"
-]
 
 # Legal domains
 LEGAL_DOMAINS = [

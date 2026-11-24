@@ -19,6 +19,9 @@ class NyayMitraState(TypedDict):
     # Emergency
     is_emergency: bool
     emergency_type: str
+    urgency_level: str               # "", CRITICAL, HIGH, MEDIUM
+    urgent_alert: str                # prepended to final response by verification
+    guardian_status: str             # checked / unavailable (LLM failed, failed open)
 
     # Research results
     research_results: List[Dict[str, Any]]
@@ -76,6 +79,9 @@ def initial_state(**overrides) -> NyayMitraState:
         "classification": {},
         "is_emergency": False,
         "emergency_type": "",
+        "urgency_level": "",
+        "urgent_alert": "",
+        "guardian_status": "",
         "research_results": [],
         "kanoon_cases": [],
         "ipc_sections": [],

@@ -17,8 +17,13 @@ Language = Literal["en", "hi", "hinglish"]
 Urgency = Literal["critical", "high", "medium", "low"]
 # Actions the user asked for; executed in fixed pipeline order, not list order
 RequestedAction = Literal["research", "drafting", "referral"]
-# "urgent" is set by guardian; weak/medium/strong by analysis (to be replaced per CLAUDE.md rules)
-CaseStrength = Literal["weak", "medium", "strong", "urgent"]
+# Set by analysis (strong/weak verdicts to be replaced per CLAUDE.md rules)
+CaseStrength = Literal["weak", "medium", "strong"]
+EmergencyType = Literal[
+    "physical_threat", "domestic_violence", "sexual_assault", "custody_emergency",
+    "illegal_detention", "anticipatory_bail_urgent", "property_emergency",
+    "court_emergency", "other",
+]
 ApprovalStatus = Literal["not_required", "pending", "approved", "rejected"]
 DocumentType = Literal[
     "legal_notice", "rti_application", "consumer_complaint",
@@ -46,13 +51,29 @@ def _coerce_choice(value: Any, choices: tuple, default: str) -> str:
 
 # ─── Guardian ─────────────────────────────────────────────────────────────────
 
+class GuardianLLMOutput(BaseModel):
+    """Raw urgency classification from the guardian LLM."""
+    model_config = ConfigDict(extra="ignore")
+
+    is_emergency: bool = False
+    emergency_type: str = ""
+    reasoning: str = ""
+
+    @model_validator(mode="after")
+    def _consistent(self):
+        if not self.is_emergency:
+            self.emergency_type = ""
+        else:
+            self.emergency_type = _coerce_choice(self.emergency_type, get_args(EmergencyType), "other")
+        return self
+
+
 class GuardianOutput(_Base):
     is_emergency: bool
     emergency_type: str = ""
-    final_response: Optional[str] = None
-    confidence_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    human_approval_needed: Optional[bool] = None
-    case_strength: Optional[CaseStrength] = None
+    urgency_level: Literal["", "CRITICAL", "HIGH", "MEDIUM"] = ""
+    urgent_alert: str = ""
+    guardian_status: Literal["checked", "unavailable"]
 
 
 # ─── Orchestrator ─────────────────────────────────────────────────────────────

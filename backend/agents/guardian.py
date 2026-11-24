@@ -1,61 +1,19 @@
 """
 Guardian Agent - NyayMitra 2.0
-Urgency detector for law firm tool.
-Detects emergency/urgent cases and flags them for immediate legal action.
-Runs in parallel before any other agent.
+Urgency detector for the law firm tool.
+
+LLM classifies whether the matter needs action within ~48 hours and which
+emergency type it is (no keyword matching). The pipeline ALWAYS continues;
+the alert is stored in `urgent_alert` and shown at the top of the final
+response by the verification agent. If the LLM call fails, the guardian
+fails open (no alert, guardian_status="unavailable").
 """
 from backend.state import NyayMitraState, initial_state
-from backend.agents.schemas import GuardianOutput, to_state
+from backend.config import OPENAI_API_KEY
+from backend.agents.schemas import GuardianLLMOutput, GuardianOutput, to_state
 from langsmith import traceable
-from typing import Literal
-
-# ─── Emergency Keywords ───────────────────────────────────────────────────────
-
-EMERGENCY_KEYWORDS = {
-    "physical_threat": [
-    "immediate threat", "jaan ka khatra", "maar raha", "maar rahi",
-    "killing", "threatened to kill", "physical abuse", "assault",
-    "attack", "hamlaa", "pitai", "maarpeet",
-    # Add these:
-    "threatened to be killed", "kill my client", "death threat",
-    "client threatened", "life threat", "jaan se maarne ki dhamki",
-    "threat to life", "murder threat"
-],
-    "domestic_violence": [
-        "domestic violence", "gharelu hinsa", "husband beating",
-        "pati maar raha", "wife beating", "abuse at home",
-        "498a urgent", "protection order urgent", "dv act urgent"
-    ],
-    "sexual_assault": [
-        "rape", "balatkaar", "sexual assault", "molestation",
-        "376", "354", "pocso"
-    ],
-    "custody_emergency": [
-        "child abducted", "child kidnapped", "bachche ko le gaya",
-        "bachche ko le gayi", "child taken away illegally",
-        "habeas corpus child", "urgent custody"
-    ],
-    "illegal_detention": [
-        "illegally detained", "wrongful arrest", "false imprisonment",
-        "galat giraftari", "habeas corpus", "custody without warrant",
-        "arrested without reason"
-    ],
-    "anticipatory_bail_urgent": [
-        "arrest imminent", "giraftari hone wali", "anticipatory bail urgent",
-        "police coming to arrest", "arrest warrant issued",
-        "surrender tomorrow", "bail urgent tonight"
-    ],
-    "property_emergency": [
-        "forceful eviction", "jbardasti nikala", "locked out of house",
-        "property sealed illegally", "bulldozer", "demolition notice today",
-        "vakf board illegal", "encroachment removal today"
-    ],
-    "court_emergency": [
-        "hearing tomorrow", "court date tomorrow", "order passed today",
-        "ex parte order", "contempt notice", "urgent stay required",
-        "execution of decree today", "warrant issued"
-    ]
-}
+from openai import OpenAI
+import json
 
 # ─── Urgency Levels ───────────────────────────────────────────────────────────
 
@@ -163,34 +121,68 @@ IMMEDIATE_LEGAL_REMEDIES = {
     }
 }
 
-# ─── Detect Emergency Type ────────────────────────────────────────────────────
+# ─── Client safety helplines (CRITICAL alerts only) ───────────────────────────
 
-def detect_emergency_type(query: str) -> tuple[bool, str, str]:
+CRITICAL_SAFETY_HELPLINES = [
+    "112 — National emergency number (police / ambulance)",
+    "181 — Women helpline",
+    "1098 — Child helpline",
+    "15100 — NALSA free legal aid",
+]
+
+# ─── LLM classification ───────────────────────────────────────────────────────
+
+GUARDIAN_PROMPT = """You are the urgency screener for an Indian law firm's legal research tool.
+Lawyers (not victims) type the queries, often about their clients.
+
+Decide if the matter needs legal action within about 48 hours, and classify it.
+
+Emergency types:
+- physical_threat: ongoing or imminent threat to someone's life or body
+- domestic_violence: ongoing abuse in a domestic relationship needing protection now
+- sexual_assault: recent sexual assault where FIR / medical evidence is time-critical
+- custody_emergency: child taken or held illegally right now
+- illegal_detention: someone currently detained/arrested unlawfully
+- anticipatory_bail_urgent: arrest is imminent
+- property_emergency: eviction, sealing or demolition happening now or within days
+- court_emergency: hearing, order execution or contempt within about 48 hours
+- other: time-critical but none of the above
+
+NOT an emergency: legal research or drafting ABOUT such offences without present
+time pressure (e.g. "research case law on Section 376 for a trial next month"),
+past events with no ongoing risk, or amounts/numbers that merely resemble section numbers.
+
+Return ONLY JSON:
+{"is_emergency": true/false, "emergency_type": "<type above, or empty if not an emergency>", "reasoning": "<one line>"}"""
+
+
+def classify_urgency(query: str) -> GuardianLLMOutput:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": GUARDIAN_PROMPT},
+            {"role": "user", "content": f"Query: {query}"},
+        ],
+        max_tokens=150,
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+    return GuardianLLMOutput.model_validate(json.loads(response.choices[0].message.content))
+
+
+def build_lawyer_alert(emergency_type: str, urgency_level: str, reasoning: str = "") -> str:
     """
-    Detect if query is an emergency and what type.
-
-    Returns:
-        (is_emergency, emergency_type, urgency_level)
-    """
-    query_lower = query.lower()
-
-    for emergency_type, keywords in EMERGENCY_KEYWORDS.items():
-        for keyword in keywords:
-            if keyword.lower() in query_lower:
-                urgency_level = URGENCY_LEVELS.get(emergency_type, "MEDIUM")
-                return True, emergency_type, urgency_level
-
-    return False, "", ""
-
-
-def build_lawyer_alert(emergency_type: str, urgency_level: str) -> str:
-    """
-    Build alert message for lawyer — not helplines, but legal action guidance.
+    Alert for the lawyer: immediate legal remedies, plus client-safety
+    helplines when the urgency is CRITICAL (danger to a person).
     """
     remedies = IMMEDIATE_LEGAL_REMEDIES.get(emergency_type, {})
 
     if not remedies:
-        return f"⚠️ URGENT CASE DETECTED — Requires immediate legal attention."
+        alert = f"⚠️ URGENT CASE — {urgency_level} PRIORITY\nTime-sensitive matter: act promptly."
+        if reasoning:
+            alert += f"\nScreening note: {reasoning}"
+        return alert + "\n\nFull research and analysis follow below."
 
     urgency_emoji = "🚨" if urgency_level == "CRITICAL" else "⚡" if urgency_level == "HIGH" else "⚠️"
 
@@ -210,10 +202,16 @@ IMMEDIATE LEGAL REMEDIES:
 
 🏛️ COURT: {remedies.get('court', 'Appropriate Court')}
 
-⏰ TIME SENSITIVITY: {remedies.get('time_sensitivity', 'Act immediately')}
+⏰ TIME SENSITIVITY: {remedies.get('time_sensitivity', 'Act immediately')}"""
+
+    if urgency_level == "CRITICAL":
+        alert += "\n\n📞 FOR THE CLIENT'S IMMEDIATE SAFETY:\n"
+        alert += "\n".join(f"• {h}" for h in CRITICAL_SAFETY_HELPLINES)
+
+    alert += """
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
-Note: Proceed with full legal research below alongside immediate action.
+Full research and analysis follow below.
 ━━━━━━━━━━━━━━━━━━━━━━━━"""
 
     return alert
@@ -224,39 +222,35 @@ Note: Proceed with full legal research below alongside immediate action.
 @traceable(name="Guardian Agent")
 def guardian_agent(state: NyayMitraState) -> dict:
     """
-    Guardian Agent — Urgency detector for law firm tool.
-
-    Detects emergency/urgent cases and provides:
-    - Urgency level (CRITICAL / HIGH / MEDIUM)
-    - Immediate legal remedies
-    - Applicable sections
-    - Court to approach
-    - Time sensitivity
-
-    Does NOT replace full legal research — just flags urgency
-    and provides immediate action guidance alongside normal pipeline.
+    Flags urgency and builds an alert; never stops the pipeline.
+    Fails open: if classification is unavailable, no alert is raised.
     """
     query = state.get("user_query", "")
-    language = state.get("language", "en")
 
-    # Detect emergency
-    is_emergency, emergency_type, urgency_level = detect_emergency_type(query)
-
-    if is_emergency:
-        # Build lawyer-focused alert
-        alert = build_lawyer_alert(emergency_type, urgency_level)
-
+    try:
+        result = classify_urgency(query)
+    except Exception as e:
+        print(f"[Guardian] Classification unavailable: {e}")
         return to_state(GuardianOutput(
-            is_emergency=True,
-            emergency_type=emergency_type,
-            final_response=alert,
-            confidence_score=1.0,
-            human_approval_needed=False,
-            case_strength="urgent",
+            is_emergency=False, emergency_type="", urgency_level="",
+            urgent_alert="", guardian_status="unavailable",
         ))
 
-    # Normal case — no emergency
-    return to_state(GuardianOutput(is_emergency=False, emergency_type=""))
+    if not result.is_emergency:
+        return to_state(GuardianOutput(
+            is_emergency=False, emergency_type="", urgency_level="",
+            urgent_alert="", guardian_status="checked",
+        ))
+
+    urgency_level = URGENCY_LEVELS.get(result.emergency_type, "MEDIUM")
+    print(f"[Guardian] Emergency: {result.emergency_type} ({urgency_level}) — {result.reasoning}")
+    return to_state(GuardianOutput(
+        is_emergency=True,
+        emergency_type=result.emergency_type,
+        urgency_level=urgency_level,
+        urgent_alert=build_lawyer_alert(result.emergency_type, urgency_level, result.reasoning),
+        guardian_status="checked",
+    ))
 
 
 # ─── Test ─────────────────────────────────────────────────────────────────────
@@ -276,6 +270,10 @@ if __name__ == "__main__":
         "Custody — child abducted by father illegally",
         "Ex parte order passed — urgent stay required",
         "Client threatened to be killed — protection needed",
+
+        # Should NOT be emergencies (old keyword false positives)
+        "Research Supreme Court case law on Section 376 IPC for a trial next month",
+        "Client paid Rs 3760 advance to the builder, wants refund",
     ]
 
     print("=" * 60)
@@ -292,9 +290,9 @@ if __name__ == "__main__":
         print(f"Emergency: {result['is_emergency']}", end="")
 
         if result["is_emergency"]:
-            print(f" | Type: {result['emergency_type']} | Urgency: {URGENCY_LEVELS.get(result['emergency_type'], 'N/A')}")
+            print(f" | Type: {result['emergency_type']} | Urgency: {result['urgency_level']}")
             print("Alert preview:")
-            print(result["final_response"][:200])
+            print(result["urgent_alert"][:200])
         else:
             print(" — Normal case, proceed to full pipeline")
         print("-" * 60)

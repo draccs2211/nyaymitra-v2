@@ -35,11 +35,13 @@ class TestLanguageDetection:
 
 # ─── Guardian Agent Tests ─────────────────────────────────────────────────────
 
+@pytest.mark.paid
 class TestGuardianAgent:
     def test_normal_query(self):
         state = make_state(user_query="My landlord is not returning my deposit")
         result = guardian_agent(state)
         assert result["is_emergency"] == False
+        assert result["guardian_status"] == "checked"
 
     def test_domestic_violence_emergency(self):
         state = make_state(user_query="My husband is doing domestic violence please help")
@@ -52,11 +54,20 @@ class TestGuardianAgent:
         result = guardian_agent(state)
         assert result["is_emergency"] == True
 
-    @pytest.mark.xfail(reason="Guardian alert is lawyer-facing and has no helplines; revisit with CLAUDE.md issue #7", strict=True)
-    def test_emergency_response_contains_helpline(self):
+    def test_critical_alert_contains_safety_helplines(self):
         state = make_state(user_query="domestic violence ho rahi hai bachao")
         result = guardian_agent(state)
-        assert "1091" in result.get("final_response", "") or "100" in result.get("final_response", "")
+        assert result["urgency_level"] == "CRITICAL"
+        assert "112" in result["urgent_alert"] and "181" in result["urgent_alert"]
+
+    @pytest.mark.parametrize("query", [
+        "Research Supreme Court case law on Section 376 IPC for a trial next month",
+        "Client paid Rs 3760 advance to the builder, wants refund",
+        "Explain the grounds for anticipatory bail under Section 438 CrPC",
+    ])
+    def test_no_false_positives(self, query):
+        result = guardian_agent(make_state(user_query=query))
+        assert result["is_emergency"] == False, result
 
 
 # ─── Orchestrator Agent Tests ──────────────────────────────────────────────────
@@ -159,7 +170,6 @@ class TestIntegration:
         assert "final_response" in result
         assert len(result["final_response"]) > 50
 
-    @pytest.mark.xfail(reason="Guardian alert is lawyer-facing and has no helplines; revisit with CLAUDE.md issue #7", strict=True)
     @pytest.mark.asyncio
     async def test_full_pipeline_emergency(self):
         from backend.pipeline import run_pipeline
@@ -169,4 +179,6 @@ class TestIntegration:
             user_id="test-user"
         )
         assert result["is_emergency"] == True
-        assert "1091" in result["final_response"] or "100" in result["final_response"]
+        assert result["final_response"].startswith(result["urgent_alert"])   # alert on top
+        assert "112" in result["final_response"]
+        assert result["case_analysis"]                    # pipeline continued past guardian

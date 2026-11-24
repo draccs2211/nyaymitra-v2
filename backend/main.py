@@ -67,6 +67,7 @@ class QueryResponse(BaseModel):
     document_hindi: Optional[str] = None
     document_english: Optional[str] = None
     is_emergency: bool
+    urgency_level: str = ""                 # CRITICAL / HIGH / MEDIUM when is_emergency
     human_approval_needed: bool
     missing_fields: List[str] = []          # facts the lawyer must fill into the draft
     unverified_citations: List[str] = []    # provisions in draft not found in research
@@ -105,6 +106,7 @@ def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryR
         document_hindi=result.get("document_hindi"),
         document_english=result.get("document_english"),
         is_emergency=result.get("is_emergency", False),
+        urgency_level=result.get("urgency_level", ""),
         human_approval_needed=result.get("human_approval_needed", False),
         missing_fields=result.get("draft_missing_fields", []),
         unverified_citations=result.get("draft_unverified_citations", []),

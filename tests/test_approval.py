@@ -112,12 +112,15 @@ class TestApprovalFlow:
         assert (await get_run(b["run_id"]))["approval_status"] == "pending"
 
     @pytest.mark.asyncio
-    async def test_emergency_not_required(self):
+    async def test_guardian_unavailable_still_completes(self, mocked_agents):
+        """Guardian LLM is blocked (unmocked) in tests -> fails open, run still finishes."""
         from backend.pipeline import run_pipeline
-        r = await run_pipeline("client facing domestic violence", "s", "u")
-        assert r["is_emergency"] is True
-        assert r["approval_status"] == "not_required"
-
+        mocked_agents(["research"])
+        r = await run_pipeline("what is section 406", "s", "u")
+        assert r["guardian_status"] == "unavailable"
+        assert r["is_emergency"] is False
+        assert r["approval_status"] in ("not_required", "pending")
+        assert r["case_analysis"]
 
 class TestApprovalDecision:
     def test_reject_requires_notes(self):

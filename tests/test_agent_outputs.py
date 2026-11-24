@@ -56,18 +56,62 @@ def mock_drafting(monkeypatch, extraction=EXTRACTED, draft=DRAFTED):
 
 # ─── Guardian ─────────────────────────────────────────────────────────────────
 
+def mock_guardian(monkeypatch, reply):
+    """reply: dict (LLM JSON), str, or Exception instance."""
+    from backend.agents import guardian
+
+    def _reply(kw):
+        if isinstance(reply, Exception):
+            raise reply
+        return reply if isinstance(reply, str) else json.dumps(reply)
+    monkeypatch.setattr(guardian, "OpenAI", fake_openai(_reply))
+
+
 class TestGuardianOutput:
-    def test_normal_validates(self):
+    def test_normal(self, monkeypatch):
         from backend.agents.guardian import guardian_agent
+        mock_guardian(monkeypatch, {"is_emergency": False, "emergency_type": "", "reasoning": "routine"})
         out = guardian_agent(make_state(user_query="landlord not returning deposit"))
-        assert out == {"is_emergency": False, "emergency_type": ""}
+        assert out["is_emergency"] is False and out["urgent_alert"] == ""
+        assert out["guardian_status"] == "checked"
         schemas.GuardianOutput(**out)
 
-    def test_emergency_validates(self):
+    def test_critical_emergency_alert(self, monkeypatch):
         from backend.agents.guardian import guardian_agent
+        mock_guardian(monkeypatch, {"is_emergency": True, "emergency_type": "domestic_violence"})
         out = guardian_agent(make_state(user_query="client facing domestic violence"))
-        m = schemas.GuardianOutput(**out)
-        assert m.is_emergency and m.case_strength == "urgent"
+        assert out["urgency_level"] == "CRITICAL"
+        assert "PWDVA" in out["urgent_alert"]
+        assert "112" in out["urgent_alert"] and "181" in out["urgent_alert"]
+        assert "final_response" not in out        # guardian no longer writes the response
+        schemas.GuardianOutput(**out)
+
+    def test_non_critical_has_no_safety_helplines(self, monkeypatch):
+        from backend.agents.guardian import guardian_agent
+        mock_guardian(monkeypatch, {"is_emergency": True, "emergency_type": "court_emergency"})
+        out = guardian_agent(make_state(user_query="hearing tomorrow"))
+        assert out["urgency_level"] == "MEDIUM"
+        assert "112" not in out["urgent_alert"]
+
+    def test_unknown_type_becomes_other(self, monkeypatch):
+        from backend.agents.guardian import guardian_agent
+        mock_guardian(monkeypatch, {"is_emergency": True, "emergency_type": "flood",
+                                    "reasoning": "limitation expires tomorrow"})
+        out = guardian_agent(make_state(user_query="limitation expires tomorrow"))
+        assert out["emergency_type"] == "other"
+        assert "limitation expires tomorrow" in out["urgent_alert"]
+
+    def test_type_dropped_when_not_emergency(self):
+        m = schemas.GuardianLLMOutput(is_emergency=False, emergency_type="physical_threat")
+        assert m.emergency_type == ""
+
+    @pytest.mark.parametrize("failure", [RuntimeError("api down"), "not json"])
+    def test_fails_open(self, monkeypatch, failure):
+        from backend.agents.guardian import guardian_agent
+        mock_guardian(monkeypatch, failure)
+        out = guardian_agent(make_state(user_query="anything"))
+        assert out["is_emergency"] is False
+        assert out["guardian_status"] == "unavailable"
 
 
 # ─── Orchestrator ─────────────────────────────────────────────────────────────
@@ -325,6 +369,27 @@ class TestRouting:
         assert pipeline.route_after_orchestrator(st) == after_orch
         assert pipeline.route_after_analysis(st) == after_analysis
         assert pipeline.route_after_drafting(st) == after_drafting
+
+
+class TestEmergencyContinues:
+    @pytest.mark.asyncio
+    async def test_emergency_runs_full_pipeline_with_alert_first(self, monkeypatch):
+        from backend.agents import orchestrator, analysis, research
+        from backend.pipeline import run_pipeline
+        mock_guardian(monkeypatch, {"is_emergency": True, "emergency_type": "anticipatory_bail_urgent"})
+        monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
+            "legal_domain": "criminal", "requested_actions": ["research"]})))
+        monkeypatch.setattr(analysis, "OpenAI", fake_openai("Bail analysis " * 30))
+        monkeypatch.setattr(research.hybrid_rag, "search", lambda q, d=None: [
+            {"id": "g:1", "content": "Bail types in India: anticipatory bail under Section 438 CrPC",
+             "metadata": {"domain": "criminal"}}])
+
+        r = await run_pipeline("police may arrest my client tomorrow", "s", "u")
+        assert r["is_emergency"] is True and r["urgency_level"] == "HIGH"
+        assert r["research_results"] and r["case_analysis"]           # not cut short
+        assert r["final_response"].startswith(r["urgent_alert"])
+        assert "Bail analysis" in r["final_response"]
+        assert "Disclaimer" in r["final_response"]
 
 
 class TestPipelineWithSchemas:
