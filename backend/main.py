@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
+from contextlib import asynccontextmanager
 from typing import Optional, List
 from datetime import datetime, timedelta
 import logging
@@ -13,7 +14,7 @@ import uuid
 import time
 
 from backend.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, DAILY_TOKEN_BUDGET, STORE_QUERY_TEXT,
+    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, DAILY_TOKEN_BUDGET, IS_PRODUCTION, STORE_QUERY_TEXT,
     RATE_LIMIT_APPROVAL_PER_MIN, RATE_LIMIT_AUTH_PER_MIN, RATE_LIMIT_QUERY_PER_MIN,
 )
 from backend.database.connection import get_db, get_db_factory, init_db
@@ -42,7 +43,24 @@ setup_logging()          # JSON in production, request IDs, PII redaction on eve
 logger = logging.getLogger("nyaymitra.api")
 access_logger = logging.getLogger("nyaymitra.access")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Production: schema is managed only by Alembic (`alembic upgrade head`);
+    /ready reports 503 until the database is at the migration head.
+    Development/test: create missing tables for convenience.
+    """
+    if not IS_PRODUCTION:
+        try:
+            init_db()
+            logger.info("Database tables ensured (non-production create_all)")
+        except Exception as e:
+            logger.warning("Database init skipped: %s", e)
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="NyayMitra 2.0 API",
     description="AI-powered legal intelligence platform for Indian lawyers",
     version="2.0.0"
@@ -202,15 +220,6 @@ def can_review(reviewer: User, requester: User) -> bool:
 
 # ─── Startup ─────────────────────────────────────────────────────────────────
 
-@app.on_event("startup")
-async def startup():
-    try:
-        init_db()
-        logger.info("Database initialized")
-    except Exception as e:
-        logger.warning("Database init skipped: %s", e)
-
-
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -237,6 +246,14 @@ def _check_database(db: Session) -> dict:
         return {"ok": False, "error": type(e).__name__}
 
 
+def _check_schema(db: Session) -> dict:
+    try:
+        from backend.database.schema import schema_status
+        return schema_status(db.connection())
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+
+
 def _check_corpus() -> dict:
     try:
         from backend.rag.hybrid_search import hybrid_rag
@@ -255,8 +272,10 @@ async def ready(db: Session = Depends(get_db)):
     """
     from backend.config import COHERE_API_KEY, INDIAN_KANOON_API_KEY, OPENAI_API_KEY
     from backend.utils.cache import redis_available
+    db_check = _check_database(db)
+    schema = _check_schema(db) if db_check["ok"] else {"ok": False, "error": "database unavailable"}
     required = {
-        "database": _check_database(db),
+        "database": db_check,
         "corpus": _check_corpus(),
         "openai_key": {"ok": bool(OPENAI_API_KEY)},
     }
@@ -265,6 +284,12 @@ async def ready(db: Session = Depends(get_db)):
         "cohere_rerank": {"ok": bool(COHERE_API_KEY)},
         "indian_kanoon": {"ok": bool(INDIAN_KANOON_API_KEY)},
     }
+    # Schema drift blocks traffic in production. In dev/test tables come from
+    # create_all (no Alembic revision), so it's only informational there.
+    if IS_PRODUCTION:
+        required["schema"] = schema
+    else:
+        optional["schema"] = schema
     is_ready = all(c["ok"] for c in required.values())
     status_text = "ready" if is_ready and all(c["ok"] for c in optional.values()) else (
         "degraded" if is_ready else "not_ready")

@@ -19,6 +19,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - Paid tests (real OpenAI, ask first): `pytest -m paid`
 - Retrieval eval (local, free): `python -m backend.evaluation.retrieval_eval`
 - Retention purge (run daily): `python -m backend.maintenance purge [--dry-run]`
+- DB migrations: `alembic upgrade head` (required in production; `/ready` is 503 until applied). After changing `backend/database/models.py`: `alembic revision --autogenerate -m "..."` (tests fail if models and migrations differ)
 
 ## Stack
 FastAPI, LangGraph (interrupt + checkpointer), OpenAI gpt-4o-mini (NOT Groq), Pydantic, FastMCP (in-process client), ChromaDB + BM25 + RRF + Cohere rerank, sentence-transformers multilingual MiniLM, Redis (optional cache, circuit breaker), PostgreSQL/SQLAlchemy, JWT + bcrypt, LangSmith `@traceable`.
@@ -47,11 +48,10 @@ guardian (flags urgency, never stops) -> orchestrator (`requested_actions`, `sea
 3. No pending-approvals list endpoint for reviewers
 4. Referral always returns Lucknow DLSA; DLSA + templates MCP servers not wired
 5. `jurisdiction` is in request/state/cache key but retrieval doesn't filter by it
-6. No DB migrations (Alembic); `Case.case_strength` column is unused
-7. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
-8. Cases are visible only to their creator, not firm colleagues (product decision)
-9. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
-10. Indian Kanoon API key not purchased (research reports `not_configured`)
+6. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
+7. Cases are visible only to their creator, not firm colleagues (product decision)
+8. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
+9. Indian Kanoon API key not purchased (research reports `not_configured`)
 
 ## Later
 Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.
