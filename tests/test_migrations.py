@@ -70,7 +70,9 @@ class TestReadySchemaGate:
         assert r.status_code == 503
         assert r.json()["checks"]["schema"]["ok"] is False
 
-    def test_development_reports_schema_without_blocking(self, client):
+    def test_development_reports_schema_without_blocking(self, client, monkeypatch):
+        import backend.config as config
+        monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-test-dummy")   # independent of .env
         r = client.get("/ready")
         assert r.status_code == 200 and "schema" in r.json()["checks"]
 

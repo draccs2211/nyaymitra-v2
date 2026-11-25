@@ -49,8 +49,9 @@ class TestClient:
         assert made[0]["timeout"] == LLM_TIMEOUT_SECONDS == 30
         assert made[0]["max_retries"] == LLM_MAX_RETRIES == 2
 
-    def test_real_openai_client_configured(self):
+    def test_real_openai_client_configured(self, monkeypatch):
         from openai import OpenAI
+        monkeypatch.setattr(llm, "OPENAI_API_KEY", "sk-test-dummy")    # independent of .env
         c = llm.get_client(OpenAI)          # constructed only; no request is sent
         assert c.timeout == LLM_TIMEOUT_SECONDS and c.max_retries == LLM_MAX_RETRIES
 

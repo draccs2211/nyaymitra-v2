@@ -79,6 +79,12 @@ class TestRequestId:
 
 
 class TestHealth:
+    @pytest.fixture(autouse=True)
+    def _openai_key_configured(self, monkeypatch):
+        # don't depend on the developer's .env (CI has no key)
+        import backend.config as config
+        monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-test-dummy")
+
     def test_liveness(self, client):
         assert client.get("/health").json()["status"] == "ok"
 

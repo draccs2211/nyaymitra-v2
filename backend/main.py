@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, field_validator
 from contextlib import asynccontextmanager
 from typing import Literal, Optional, List
 from datetime import datetime
+import asyncio
 import logging
+import os
 import re
 import uuid
 import time
@@ -68,6 +70,14 @@ async def lifespan(app: FastAPI):
             db.close()
     except Exception as e:
         logger.warning("Approval expiry sweep skipped: %s", e)
+    # Load the embedding model before taking traffic (first query would otherwise wait for it)
+    if os.getenv("WARM_UP_MODELS", "true").lower() == "true":
+        try:
+            from backend.rag.hybrid_search import hybrid_rag
+            await asyncio.to_thread(hybrid_rag.warm_up)
+            logger.info("Embedding model warmed up")
+        except Exception as e:
+            logger.warning("Model warm-up failed: %s", e)
     yield
 
 

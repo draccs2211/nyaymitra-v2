@@ -5,7 +5,6 @@ Dense + Sparse search with RRF fusion + Cohere reranking.
 """
 from typing import List, Dict, Any, Optional
 import chromadb
-from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
 from backend.config import (
     EMBEDDING_MODEL, CHROMA_PERSIST_DIR,
@@ -17,6 +16,7 @@ import logging
 import pickle
 import os
 import re
+import threading
 import time
 
 logger = logging.getLogger("nyaymitra.rag")
@@ -38,7 +38,10 @@ def tokenize(text: str) -> List[str]:
 
 class HybridRAG:
     def __init__(self):
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+        # Embedding model (~0.5 GB) loads lazily on first use; the API warms it
+        # up at startup (main.lifespan) so CLIs/imports don't pay for it.
+        self._embedding_model = None
+        self._model_lock = threading.Lock()
         self.chroma_client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
         self.cohere_client = cohere.Client(COHERE_API_KEY) if COHERE_API_KEY else None
         self.rerank_model = COHERE_RERANK_MODEL
@@ -60,6 +63,25 @@ class HybridRAG:
         # BM25 must mirror Chroma; rebuild if cache missing or stale
         if self.collection.count() != len(self.bm25_ids):
             self.rebuild_bm25_from_chroma()
+
+    @property
+    def embedding_model(self):
+        if self._embedding_model is None:
+            with self._model_lock:
+                if self._embedding_model is None:
+                    # imported here: sentence_transformers pulls in torch (slow import)
+                    from sentence_transformers import SentenceTransformer
+                    logger.info("Loading embedding model %s", EMBEDDING_MODEL)
+                    self._embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+        return self._embedding_model
+
+    @embedding_model.setter
+    def embedding_model(self, model) -> None:
+        self._embedding_model = model
+
+    def warm_up(self) -> None:
+        """Load the embedding model now (call at service startup)."""
+        self.get_embedding("warm up")
 
     def _init_collection(self):
         self.collection = self.chroma_client.get_or_create_collection(
