@@ -18,6 +18,7 @@ DocType = Literal[
     "legal_guidance",   # procedural / practical guidance
     "helplines",        # contact numbers
     "case_law",         # judgment — requires court, date and source_url
+    "statute_section",  # official text of one section of an Act — requires act, section, source_url
 ]
 
 _DATE_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")          # YYYY, YYYY-MM or YYYY-MM-DD
@@ -74,6 +75,8 @@ class DocMetadata(BaseModel):
             raise ValueError(f"{self.doc_type} requires act")
         if self.doc_type == "ipc_section" and not self.section:
             raise ValueError("ipc_section requires section")
+        if self.doc_type == "statute_section" and not (self.act and self.section and self.source_url):
+            raise ValueError("statute_section requires act, section and source_url (official text only)")
         return self
 
     def to_chroma(self) -> dict:

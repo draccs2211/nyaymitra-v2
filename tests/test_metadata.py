@@ -5,7 +5,9 @@ Run: pytest tests/test_metadata.py -v
 import pytest
 from pydantic import ValidationError
 
-from backend.data_loader import LEGAL_DATA, build_documents
+from backend.data_loader import build_documents
+
+LEGAL_DATA = build_documents()      # the real corpus files in data/legal_corpus
 from backend.rag.metadata import DocMetadata
 
 REQUIRED_KEYS = {"act", "section", "court", "date", "source_url", "doc_type", "jurisdiction"}
@@ -26,7 +28,9 @@ class TestCorpusMetadata:
             assert None not in DocMetadata.model_validate(d["metadata"]).to_chroma().values()
 
     def test_curated_docs_not_presented_as_case_law(self):
-        for d in LEGAL_DATA:
+        curated = [d for d in LEGAL_DATA if d["_file"] == "curated_summaries.jsonl"]
+        assert curated
+        for d in curated:
             m = DocMetadata.model_validate(d["metadata"])
             assert m.doc_type != "case_law"
             assert "curated" in m.source_name.lower()

@@ -13,7 +13,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 
 ## Commands
 - Install: `pip install -r requirements.txt` (unpinned versions on purpose)
-- Load legal data: `python -m backend.data_loader` (idempotent; safe to re-run)
+- Load legal data: `python -m backend.data_loader [--dry-run]` — corpus files in `data/legal_corpus/` (format: its README.md); idempotent, prunes docs no longer in the files
 - Run API: `uvicorn backend.main:app --reload --port 8000`
 - Test one agent: `python -m backend.agents.<name>`
 - Free tests: `$env:HF_HUB_OFFLINE='1'; pytest -m "not paid"` (OpenAI/Cohere/Kanoon blocked by tests/conftest.py)
@@ -45,7 +45,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 - New tests must not call paid APIs unless marked `@pytest.mark.paid`.
 
 ## Known issues (priority order)
-1. Legal content needs lawyer review: IPC 376 -> "BNS 63" (punishment is likely BNS 64) in `legal_reference_mcp.py`, `guardian.py`, `data_loader.py`; UP Rent Act "30-day deposit return" claim; whole IPC->BNS table
+1. Legal content needs lawyer review: IPC 376 -> "BNS 63" (punishment is likely BNS 64) in `legal_reference_mcp.py`, `guardian.py`, `data/legal_corpus/curated_summaries.jsonl`; UP Rent Act "30-day deposit return" claim; whole IPC->BNS table
 2. Approval checkpointer is in-memory (`get_checkpointer()` in `pipeline.py`): pending reviews are marked `expired` (410) after a restart. Local Postgres `DATABASE_URL` doesn't connect; fix it, then use a Postgres saver (needs `langgraph-checkpoint-postgres`)
 3. Referral always returns Lucknow DLSA; DLSA + templates MCP servers not wired
 4. `jurisdiction` is in request/state/cache key but retrieval doesn't filter by it

@@ -27,6 +27,7 @@ ENV HF_HUB_OFFLINE=1
 
 COPY alembic.ini ./
 COPY backend ./backend
+COPY data/legal_corpus ./data/legal_corpus
 COPY docker/entrypoint.sh ./entrypoint.sh
 
 RUN useradd --uid 10001 --create-home app \
