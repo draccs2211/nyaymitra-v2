@@ -1,0 +1,47 @@
+# Pilot stack: API + PostgreSQL + Redis on one host.
+#   docker compose up -d --build
+#   docker compose exec api python -m backend.data_loader        # first run: load corpus
+#   docker compose exec api python -m backend.maintenance create-firm --name "..." --admin-email ...
+# Secrets (SECRET_KEY, OPENAI_API_KEY, ...) come from .env (see .env.example).
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://nyaymitra:${POSTGRES_PASSWORD:-change-me}@db:5432/nyaymitra
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma:/app/data/chroma_db
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nyaymitra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: nyaymitra
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nyaymitra -d nyaymitra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # cache + sessions only: no persistence needed
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  chroma:

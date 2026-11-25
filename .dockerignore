@@ -1,0 +1,18 @@
+# Secrets and local environments never go into the image
+.env
+.env.*
+!.env.example
+.nyaymitra/
+venv/
+.git/
+.github/
+.claude/
+**/__pycache__/
+*.pyc
+*.db
+data/chroma_db/
+data/{legal_corpus,templates,ipc_sections}/
+frontend/
+tests/
+test.py
+backend/rag/test.py
