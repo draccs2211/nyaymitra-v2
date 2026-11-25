@@ -67,6 +67,7 @@ class GuardianLLMOutput(BaseModel):
 
 
 class GuardianOutput(_Base):
+    tokens_used: Optional[int] = None
     is_emergency: bool
     emergency_type: str = ""
     urgency_level: Literal["", "CRITICAL", "HIGH", "MEDIUM"] = ""
@@ -141,6 +142,7 @@ class ClassificationMeta(_Base):
 
 
 class OrchestratorOutput(_Base):
+    tokens_used: Optional[int] = None
     legal_domain: str
     requested_actions: List[RequestedAction] = Field(min_length=1)
     language: Language
@@ -244,6 +246,7 @@ class AnalysisDetail(_Base):
 
 
 class AnalysisOutput(_Base):
+    tokens_used: Optional[int] = None
     case_analysis: AnalysisDetail
     next_steps: List[str] = Field(default_factory=list)
     final_response: str
@@ -298,6 +301,7 @@ class DraftLLMOutput(BaseModel):
 
 
 class DraftingOutput(_Base):
+    tokens_used: Optional[int] = None
     draft_document: str
     document_type: DocumentType
     document_hindi: str

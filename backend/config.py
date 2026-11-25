@@ -9,6 +9,13 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
 
+# LLM call limits
+LLM_MODEL = "gpt-4o-mini"
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+# Daily token budget per firm (per user if no firm); 0 = unlimited
+DAILY_TOKEN_BUDGET = int(os.getenv("DAILY_TOKEN_BUDGET", "2000000"))
+
 # External APIs
 INDIAN_KANOON_API_KEY = os.getenv("INDIAN_KANOON_API_KEY", "")
 INDIAN_KANOON_BASE_URL = "https://api.indiankanoon.org"

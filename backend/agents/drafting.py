@@ -7,7 +7,7 @@ Drafting Agent - NyayMitra 2.0
 Falls back to deterministic template filling if the LLM fails.
 """
 from backend.state import NyayMitraState, initial_state
-from backend.config import OPENAI_API_KEY
+from backend.llm import Usage, chat_json
 from backend.agents.schemas import DraftFields, DraftingOutput, DraftLLMOutput, to_state
 from backend.utils.citations import cited_numbers, find_unverified_citations, research_context  # noqa: F401
 from langsmith import traceable
@@ -393,16 +393,9 @@ def _allowed_context(state: NyayMitraState, doc_type: str) -> str:
     return "\n".join(p for p in parts if p)
 
 
-def _llm_json(system: str, user: str, max_tokens: int) -> dict:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        max_tokens=max_tokens,
-        temperature=0.2,
-        response_format={"type": "json_object"},
-    )
-    return json.loads(response.choices[0].message.content)
+def _llm_json(system: str, user: str, max_tokens: int):
+    """Returns (dict, Usage)."""
+    return chat_json(OpenAI, system, user, max_tokens=max_tokens, temperature=0.2)
 
 
 def extract_fields(state: NyayMitraState) -> DraftFields:
@@ -411,7 +404,8 @@ def extract_fields(state: NyayMitraState) -> DraftFields:
     user = f"Query: {state.get('user_query', '')}\n"
     if convo:
         user += f"\nRecent conversation:\n{convo}\n"
-    return DraftFields.model_validate(_llm_json(EXTRACTION_PROMPT, user, 700))
+    data, usage = _llm_json(EXTRACTION_PROMPT, user, 700)
+    return DraftFields.model_validate(data), usage
 
 
 def missing_fields(fields: DraftFields) -> list:
@@ -440,8 +434,10 @@ def drafting_agent(state: NyayMitraState) -> dict:
     language = state.get("language", "en")
 
     # 1. Field extraction (LLM). On failure we still draft a placeholder template.
+    usage = Usage()
     try:
-        fields = extract_fields(state)
+        fields, u = extract_fields(state)
+        usage += u
     except Exception as e:
         print(f"[Drafting] Extraction failed: {e}")
         fields = DraftFields()
@@ -463,7 +459,9 @@ def drafting_agent(state: NyayMitraState) -> dict:
             f"ALLOWED LEGAL CONTEXT:\n{allowed[:4000] or '(none)'}\n\n"
             f"LEGAL ANALYSIS (for context, do not copy conclusions):\n{analysis or '(none)'}"
         )
-        draft = DraftLLMOutput.model_validate(_llm_json(DRAFTING_PROMPT, user, 3500))
+        data, u = _llm_json(DRAFTING_PROMPT, user, 3500)
+        usage += u
+        draft = DraftLLMOutput.model_validate(data)
         doc_english, doc_hindi = draft.english, draft.hindi
     except Exception as e:
         print(f"[Drafting] LLM drafting failed, using template: {e}")
@@ -484,6 +482,7 @@ def drafting_agent(state: NyayMitraState) -> dict:
         draft_missing_fields=missing,
         draft_unverified_citations=unverified,
         draft_method=method,
+        tokens_used=usage.total,
     ))
 
 

@@ -7,14 +7,13 @@ questions for the lawyer. The LLM returns JSON (AnalysisLLMOutput) which is
 rendered to the response text here; provisions cited that are not in the
 retrieved context are flagged by the citation guard.
 """
-import json
 import logging
 
 from langsmith import traceable
 from openai import OpenAI
 
 from backend.agents.schemas import AnalysisDetail, AnalysisLLMOutput, AnalysisOutput, to_state
-from backend.config import OPENAI_API_KEY
+from backend.llm import chat_json
 from backend.state import NyayMitraState
 from backend.utils.citations import find_unverified_citations, research_context
 
@@ -130,18 +129,9 @@ def analysis_agent(state: NyayMitraState) -> dict:
     kanoon_cases = state.get("kanoon_cases", [])
 
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _build_prompt(state)},
-            ],
-            max_tokens=1800,
-            temperature=0.3,
-            response_format={"type": "json_object"},
-        )
-        result = AnalysisLLMOutput.model_validate(json.loads(response.choices[0].message.content))
+        data, usage = chat_json(OpenAI, SYSTEM_PROMPT, _build_prompt(state),
+                                max_tokens=1800, temperature=0.3)
+        result = AnalysisLLMOutput.model_validate(data)
         text = render(result, language)
         unverified = find_unverified_citations([text], research_context(state))
 
@@ -156,6 +146,7 @@ def analysis_agent(state: NyayMitraState) -> dict:
             next_steps=result.action_plan[:5],
             final_response=text,
             analysis_unverified_citations=unverified,
+            tokens_used=usage.total,
         ))
 
     except Exception as e:

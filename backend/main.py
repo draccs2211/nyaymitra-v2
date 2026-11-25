@@ -1,17 +1,18 @@
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import re
 import uuid
 import time
 
 from backend.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, STORE_QUERY_TEXT,
+    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, DAILY_TOKEN_BUDGET, STORE_QUERY_TEXT,
     RATE_LIMIT_APPROVAL_PER_MIN, RATE_LIMIT_AUTH_PER_MIN, RATE_LIMIT_QUERY_PER_MIN,
 )
 from backend.database.connection import get_db, get_db_factory, init_db
@@ -109,6 +110,7 @@ class QueryResponse(BaseModel):
     source_status: dict = {}                # per external source: ok / not_configured / unavailable / error
     missing_fields: List[str] = []          # facts the lawyer must fill into the draft
     unverified_citations: List[str] = []    # provisions in draft not found in research
+    tokens_used: int = 0
     run_id: Optional[str] = None
     approval_status: str = "not_required"   # not_required / pending / approved / rejected
     response_time_ms: int
@@ -152,6 +154,7 @@ def _to_response(result: dict, session_id: str, response_time_ms: int) -> QueryR
         missing_fields=result.get("draft_missing_fields", []),
         unverified_citations=sorted(set(result.get("draft_unverified_citations", []))
                                     | set(result.get("analysis_unverified_citations", []))),
+        tokens_used=int(result.get("tokens_used") or 0),
         run_id=result.get("run_id"),
         approval_status=result.get("approval_status", "not_required"),
         response_time_ms=response_time_ms,
@@ -316,6 +319,13 @@ async def process_query(
     if cached and not request.session_id:
         return _to_response(cached, session_id, int((time.time() - start_time) * 1000))
 
+    # Daily LLM budget per firm (or per user without a firm)
+    if DAILY_TOKEN_BUDGET and tokens_used_today(db, current_user) >= DAILY_TOKEN_BUDGET:
+        raise HTTPException(
+            status_code=429,
+            detail="Daily AI usage limit reached for your firm. It resets at 00:00 UTC.",
+        )
+
     # Run pipeline
     try:
         result = await run_pipeline(
@@ -434,7 +444,8 @@ def log_query(db_factory, user_id, case_id, query, language, result, response_ti
             legal_domain=result.get("legal_domain", "general"),
             confidence_score=result.get("confidence_score", 0.5),
             response_time_ms=response_time,
-            is_emergency=result.get("is_emergency", False)
+            is_emergency=result.get("is_emergency", False),
+            tokens_used=int(result.get("tokens_used") or 0),
         )
         db.add(log)
         db.commit()
@@ -443,6 +454,17 @@ def log_query(db_factory, user_id, case_id, query, language, result, response_ti
         logger.exception("Failed to write query log (user=%s)", user_id)
     finally:
         db.close()
+
+
+def tokens_used_today(db: Session, user: User) -> int:
+    """LLM tokens used since 00:00 UTC by the user's firm (or the user if solo)."""
+    since = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    q = db.query(func.coalesce(func.sum(QueryLog.tokens_used), 0)).filter(QueryLog.created_at >= since)
+    if user.firm_id:
+        q = q.join(User, QueryLog.user_id == User.id).filter(User.firm_id == user.firm_id)
+    else:
+        q = q.filter(QueryLog.user_id == user.id)
+    return int(q.scalar() or 0)
 
 
 def get_owned_case(db: Session, case_id: str, user: User) -> Case:

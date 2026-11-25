@@ -10,7 +10,8 @@ import hashlib
 import threading
 import time
 
-LLM_MODEL = "gpt-4o-mini"
+from backend.config import LLM_MODEL
+
 _CORPUS_TTL = 60.0
 
 _lock = threading.Lock()

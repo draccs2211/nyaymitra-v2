@@ -9,11 +9,10 @@ response by the verification agent. If the LLM call fails, the guardian
 fails open (no alert, guardian_status="unavailable").
 """
 from backend.state import NyayMitraState, initial_state
-from backend.config import OPENAI_API_KEY
+from backend.llm import chat_json
 from backend.agents.schemas import GuardianLLMOutput, GuardianOutput, to_state
 from langsmith import traceable
 from openai import OpenAI
-import json
 
 # ─── Urgency Levels ───────────────────────────────────────────────────────────
 
@@ -156,19 +155,10 @@ Return ONLY JSON:
 {"is_emergency": true/false, "emergency_type": "<type above, or empty if not an emergency>", "reasoning": "<one line>"}"""
 
 
-def classify_urgency(query: str) -> GuardianLLMOutput:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": GUARDIAN_PROMPT},
-            {"role": "user", "content": f"Query: {query}"},
-        ],
-        max_tokens=150,
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
-    return GuardianLLMOutput.model_validate(json.loads(response.choices[0].message.content))
+def classify_urgency(query: str):
+    """Returns (GuardianLLMOutput, Usage)."""
+    data, usage = chat_json(OpenAI, GUARDIAN_PROMPT, f"Query: {query}", max_tokens=150, temperature=0)
+    return GuardianLLMOutput.model_validate(data), usage
 
 
 def build_lawyer_alert(emergency_type: str, urgency_level: str, reasoning: str = "") -> str:
@@ -228,7 +218,7 @@ def guardian_agent(state: NyayMitraState) -> dict:
     query = state.get("user_query", "")
 
     try:
-        result = classify_urgency(query)
+        result, usage = classify_urgency(query)
     except Exception as e:
         print(f"[Guardian] Classification unavailable: {e}")
         return to_state(GuardianOutput(
@@ -239,7 +229,7 @@ def guardian_agent(state: NyayMitraState) -> dict:
     if not result.is_emergency:
         return to_state(GuardianOutput(
             is_emergency=False, emergency_type="", urgency_level="",
-            urgent_alert="", guardian_status="checked",
+            urgent_alert="", guardian_status="checked", tokens_used=usage.total,
         ))
 
     urgency_level = URGENCY_LEVELS.get(result.emergency_type, "MEDIUM")
@@ -250,6 +240,7 @@ def guardian_agent(state: NyayMitraState) -> dict:
         urgency_level=urgency_level,
         urgent_alert=build_lawyer_alert(result.emergency_type, urgency_level, result.reasoning),
         guardian_status="checked",
+        tokens_used=usage.total,
     ))
 
 

@@ -4,7 +4,7 @@ Uses OpenAI GPT-4o-mini to intelligently classify legal queries.
 No hardcoded keywords — pure LLM-based classification.
 """
 from backend.state import NyayMitraState, initial_state
-from backend.config import OPENAI_API_KEY
+from backend.llm import chat_json
 from backend.agents.schemas import (
     ClassificationLLMOutput, ClassificationMeta, OrchestratorOutput, to_state
 )
@@ -92,20 +92,9 @@ def orchestrator_agent(state: NyayMitraState) -> dict:
 Classify this query and return JSON."""
 
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": CLASSIFICATION_PROMPT},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=500,
-            temperature=0.1,
-            response_format={"type": "json_object"}
-        )
-
-        result_text = response.choices[0].message.content
-        result = ClassificationLLMOutput.model_validate(json.loads(result_text))
+        data, usage = chat_json(OpenAI, CLASSIFICATION_PROMPT, user_message,
+                                max_tokens=500, temperature=0.1)
+        result = ClassificationLLMOutput.model_validate(data)
 
         print(f"[Orchestrator] Domain: {result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Actions: {result.requested_actions}")
         print(f"[Orchestrator] Reasoning: {result.reasoning}")
@@ -115,6 +104,7 @@ Classify this query and return JSON."""
             requested_actions=result.requested_actions,
             language=result.language,
             search_query_en=result.search_query_en,
+            tokens_used=usage.total,
             classification=ClassificationMeta(
                 urgency=result.urgency,
                 key_issues=result.key_issues,

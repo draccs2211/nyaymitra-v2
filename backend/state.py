@@ -1,4 +1,5 @@
-from typing import TypedDict, List, Optional, Dict, Any
+import operator
+from typing import Annotated, TypedDict, List, Optional, Dict, Any
 
 
 class NyayMitraState(TypedDict):
@@ -64,6 +65,9 @@ class NyayMitraState(TypedDict):
     sources: List[str]
     next_steps: List[str]
 
+    # Cost accounting: every LLM-calling node returns its tokens; LangGraph sums them
+    tokens_used: Annotated[int, operator.add]
+
     # Error handling
     error: Optional[str]
     retry_count: int
@@ -114,6 +118,7 @@ def initial_state(**overrides) -> NyayMitraState:
         "next_steps": [],
         "error": None,
         "retry_count": 0,
+        "tokens_used": 0,
     }
     unknown = set(overrides) - set(state)
     if unknown:
