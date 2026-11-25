@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
+from fastapi import FastAPI, Depends, HTTPException, Query, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
@@ -6,7 +6,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
 from contextlib import asynccontextmanager
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import datetime, timedelta
 import logging
 import re
@@ -23,7 +23,7 @@ from backend.utils.rate_limit import limit_by_ip, limit_by_user
 from backend.utils.redact import keyed_hash
 from backend.logging_config import request_id_var, setup_logging
 from backend.versioning import cache_version
-from backend.database.models import User, Firm, Case, Document, QueryLog
+from backend.database.models import Approval, User, Firm, Case, Document, QueryLog
 from backend.utils.auth import (
     SECRET_KEY, verify_password, get_password_hash,
     create_access_token, get_current_user
@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI):
             logger.info("Database tables ensured (non-production create_all)")
         except Exception as e:
             logger.warning("Database init skipped: %s", e)
+    try:
+        db = get_db_factory()()
+        try:
+            expired = await expire_orphaned_approvals(db)
+            if expired:
+                logger.warning("Marked %d pending approvals expired (run state lost on restart)", expired)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Approval expiry sweep skipped: %s", e)
     yield
 
 
@@ -447,6 +457,13 @@ async def process_query(
     conversation_history.append({"role": "assistant", "content": result.get("final_response", "")})
     store_session(session_id, {"history": conversation_history[-20:]}, user_id=current_user.id)  # Keep last 20 turns
 
+    if result.get("approval_status") == "pending" and result.get("run_id"):
+        db.add(Approval(
+            run_id=result["run_id"], requester_id=current_user.id, firm_id=current_user.firm_id,
+            case_id=request.case_id, document_type=result.get("document_type") or None,
+        ))
+        db.commit()
+
     # Cache only final, non-emergency responses — never ones awaiting review
     if (not result.get("is_emergency") and not request.session_id
             and result.get("approval_status") == "not_required"):
@@ -470,20 +487,70 @@ async def process_query(
 
 # ─── Approval Routes ──────────────────────────────────────────────────────────
 
-async def _load_run_for(run_id: str, current_user: User, db: Session, *, review: bool):
-    run = await get_run(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    requester = db.query(User).filter(User.id == run.get("user_id")).first()
-    if requester is None:
-        raise HTTPException(status_code=404, detail="Run not found")
-    allowed = can_review(current_user, requester) or (
-        not review and current_user.id == requester.id
-    )
-    if not allowed:
+_EXPIRED_DETAIL = ("This review request has expired: the run state was lost (e.g. server restart) "
+                   "before a decision. Please run the query again.")
+
+
+def _approval_visible_to(user: User, row: Approval, requester: User, *, review: bool) -> bool:
+    if can_review(user, requester):
+        return True
+    return not review and user.id == row.requester_id
+
+
+def _load_approval(run_id: str, current_user: User, db: Session, *, review: bool) -> Approval:
+    row = db.get(Approval, run_id)
+    requester = db.get(User, row.requester_id) if row else None
+    if row is None or requester is None or not _approval_visible_to(current_user, row, requester, review=review):
         # 404, not 403: don't reveal that the run exists
         raise HTTPException(status_code=404, detail="Run not found")
-    return run
+    return row
+
+
+def _expire(db: Session, row: Approval) -> None:
+    row.status = "expired"
+    row.decided_at = datetime.utcnow()
+    db.commit()
+
+
+async def expire_orphaned_approvals(db: Session) -> int:
+    """Mark pending approvals whose run state no longer exists as expired."""
+    count = 0
+    for row in db.query(Approval).filter(Approval.status == "pending").all():
+        if await get_run(row.run_id) is None:
+            row.status, row.decided_at = "expired", datetime.utcnow()
+            count += 1
+    if count:
+        db.commit()
+    return count
+
+
+@app.get("/api/approvals")
+async def list_approvals(
+    status_filter: Literal["pending", "approved", "rejected", "expired", "all"] = Query("pending", alias="status"),
+    current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
+    db: Session = Depends(get_db),
+):
+    """
+    Review queue. Admins/seniors see their firm's requests; everyone sees their own.
+    Metadata only — open a run with GET /api/approvals/{run_id}.
+    """
+    visible = Approval.requester_id == current_user.id
+    if current_user.firm_id and current_user.role in ("admin", "senior"):
+        visible = visible | (Approval.firm_id == current_user.firm_id)
+    q = db.query(Approval).filter(visible)
+    if status_filter != "all":
+        q = q.filter(Approval.status == status_filter)
+    rows = q.order_by(Approval.created_at.desc()).limit(100).all()
+    return [
+        {
+            "run_id": r.run_id, "status": r.status, "requester_id": r.requester_id,
+            "case_id": r.case_id, "document_type": r.document_type,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "decided_at": r.decided_at.isoformat() if r.decided_at else None,
+            "reviewer_id": r.reviewer_id,
+        }
+        for r in rows
+    ]
 
 
 @app.get("/api/approvals/{run_id}", response_model=QueryResponse)
@@ -495,7 +562,12 @@ async def get_approval(
     db: Session = Depends(get_db)
 ):
     """View a run's response and approval status (requester or eligible reviewer)."""
-    run = await _load_run_for(run_id, current_user, db, review=False)
+    row = _load_approval(run_id, current_user, db, review=False)
+    run = await get_run(run_id)
+    if run is None:
+        if row.status == "pending":
+            _expire(db, row)
+        raise HTTPException(status_code=410, detail=_EXPIRED_DETAIL)
     audit(db_factory, "approval.view", user_id=current_user.id, resource=f"run:{run_id}", ip=client_ip(http))
     return _to_response(run, run.get("session_id", ""), 0)
 
@@ -509,10 +581,15 @@ async def decide_approval(
     current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
     db: Session = Depends(get_db)
 ):
-    """Approve or reject a pending run (eligible reviewer only)."""
-    run = await _load_run_for(run_id, current_user, db, review=True)
-    if run.get("approval_status") != "pending":
-        raise HTTPException(status_code=409, detail=f"Run is {run.get('approval_status')}, not pending")
+    """Approve or reject a pending run (eligible reviewer only). Saves the draft as a Document."""
+    row = _load_approval(run_id, current_user, db, review=True)
+    if row.status == "expired":
+        raise HTTPException(status_code=410, detail=_EXPIRED_DETAIL)
+    if row.status != "pending":
+        raise HTTPException(status_code=409, detail=f"Run is {row.status}, not pending")
+    if await get_run(run_id) is None:
+        _expire(db, row)
+        raise HTTPException(status_code=410, detail=_EXPIRED_DETAIL)
     try:
         result = await resume_pipeline(run_id, {
             "decision": request.decision,
@@ -524,10 +601,23 @@ async def decide_approval(
         raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+    row.status = result.get("approval_status", request.decision)
+    row.reviewer_id = current_user.id
+    row.decided_at = datetime.utcnow()
+    if result.get("draft_document"):
+        db.add(Document(
+            case_id=row.case_id, user_id=row.requester_id, run_id=run_id,
+            doc_type=result.get("document_type"),
+            content_hindi=result.get("document_hindi"), content_english=result.get("document_english"),
+            status="final" if row.status == "approved" else "rejected",
+        ))
+    db.commit()
+
     audit(db_factory, "approval.decide", user_id=current_user.id, resource=f"run:{run_id}",
           ip=client_ip(http), details={"decision": request.decision,
                                        "edited": request.edited_response is not None,
-                                       "requester_id": run.get("user_id")})
+                                       "requester_id": row.requester_id})
     return _to_response(result, result.get("session_id", ""), 0)
 
 
@@ -643,6 +733,20 @@ async def get_case(
 
 
 # ─── Document Routes ───────────────────────────────────────────────────────────
+
+@app.get("/api/documents")
+async def list_my_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    docs = db.query(Document).filter(Document.user_id == current_user.id) \
+        .order_by(Document.created_at.desc()).limit(100).all()
+    return [
+        {"id": d.id, "case_id": d.case_id, "run_id": d.run_id, "doc_type": d.doc_type,
+         "status": d.status, "created_at": d.created_at.isoformat() if d.created_at else None}
+        for d in docs
+    ]
+
 
 @app.get("/api/documents/{case_id}")
 async def get_documents(

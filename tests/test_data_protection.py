@@ -40,7 +40,9 @@ class TestTracingConfig:
         assert config.configure_tracing(env)["hide_payloads"] is False
 
     def test_app_env_defaults_to_production(self, monkeypatch):
+        import dotenv
         monkeypatch.delenv("APP_ENV", raising=False)
+        monkeypatch.setattr(dotenv, "load_dotenv", lambda *a, **k: False)   # ignore the developer's .env
         import importlib
         try:
             assert importlib.reload(config).APP_ENV == "production"

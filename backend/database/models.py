@@ -66,13 +66,33 @@ class Document(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     case_id = Column(String, ForeignKey("cases.id"), nullable=True, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    run_id = Column(String, nullable=True, index=True)   # pipeline run that produced it
     doc_type = Column(String)                    # legal_notice, rti, complaint
     content_hindi = Column(Text)
     content_english = Column(Text)
-    status = Column(String, default="draft")     # draft, final, sent
+    status = Column(String, default="draft")     # draft, final (approved), rejected, sent
     created_at = Column(DateTime, default=datetime.utcnow)
 
     case = relationship("Case", back_populates="documents")
+
+
+class Approval(Base):
+    """
+    Durable record of a run awaiting / given human review. Holds no client
+    text (that lives in the run state). Authorisation and the reviewer queue
+    use this table, so they keep working even if the run state is lost.
+    """
+    __tablename__ = "approvals"
+
+    run_id = Column(String, primary_key=True)
+    requester_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    firm_id = Column(String, ForeignKey("firms.id"), nullable=True, index=True)
+    case_id = Column(String, ForeignKey("cases.id"), nullable=True)
+    document_type = Column(String)
+    status = Column(String, nullable=False, default="pending", index=True)  # pending/approved/rejected/expired
+    reviewer_id = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    decided_at = Column(DateTime, nullable=True)
 
 
 class QueryLog(Base):
