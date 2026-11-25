@@ -7,6 +7,8 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - Always run from repo root with `python -m ...` (never `python backend/x.py`)
 - Secrets only in `.env`. NEVER read, print, or commit `.env`.
 - `.env` must contain `SECRET_KEY` (>= 32 random chars) or the API refuses to start.
+- `APP_ENV` defaults to `production` (traces hide client text, strictest settings); set `APP_ENV=development` locally.
+- Data minimisation: `STORE_QUERY_TEXT` (default false), `RETENTION_QUERY_LOG_DAYS` (90), `RETENTION_AUDIT_DAYS` (365).
 
 ## Commands
 - Install: `pip install -r requirements.txt` (unpinned versions on purpose)
@@ -16,6 +18,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - Free tests: `$env:HF_HUB_OFFLINE='1'; pytest -m "not paid"` (OpenAI/Cohere/Kanoon blocked by tests/conftest.py)
 - Paid tests (real OpenAI, ask first): `pytest -m paid`
 - Retrieval eval (local, free): `python -m backend.evaluation.retrieval_eval`
+- Retention purge (run daily): `python -m backend.maintenance purge [--dry-run]`
 
 ## Stack
 FastAPI, LangGraph (interrupt + checkpointer), OpenAI gpt-4o-mini (NOT Groq), Pydantic, FastMCP (in-process client), ChromaDB + BM25 + RRF + Cohere rerank, sentence-transformers multilingual MiniLM, Redis (optional cache, circuit breaker), PostgreSQL/SQLAlchemy, JWT + bcrypt, LangSmith `@traceable`.

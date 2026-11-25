@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -11,15 +11,17 @@ import uuid
 import time
 
 from backend.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS,
+    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, STORE_QUERY_TEXT,
     RATE_LIMIT_APPROVAL_PER_MIN, RATE_LIMIT_AUTH_PER_MIN, RATE_LIMIT_QUERY_PER_MIN,
 )
 from backend.database.connection import get_db, get_db_factory, init_db
+from backend.utils.audit import audit, client_ip
 from backend.utils.rate_limit import limit_by_ip, limit_by_user
+from backend.utils.redact import install_redaction, keyed_hash
 from backend.versioning import cache_version
 from backend.database.models import User, Firm, Case, Document, QueryLog
 from backend.utils.auth import (
-    verify_password, get_password_hash,
+    SECRET_KEY, verify_password, get_password_hash,
     create_access_token, get_current_user
 )
 from backend.utils.cache import (
@@ -33,6 +35,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+install_redaction()     # mask emails / phones / Aadhaar / PAN in every log line
 logger = logging.getLogger("nyaymitra.api")
 
 app = FastAPI(
@@ -198,7 +202,8 @@ async def health():
 
 @app.post("/api/auth/register", response_model=TokenResponse,
           dependencies=[Depends(limit_by_ip("register", RATE_LIMIT_AUTH_PER_MIN))])
-async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+async def register(request: RegisterRequest, http: Request,
+                   db: Session = Depends(get_db), db_factory=Depends(get_db_factory)):
     # Check if email exists
     existing = db.query(User).filter(User.email == request.email).first()
     if existing:
@@ -222,6 +227,8 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    audit(db_factory, "auth.register", user_id=user.id, ip=client_ip(http),
+          details={"role": user.role, "created_firm": firm is not None})
 
     token = create_access_token(
         data={"sub": user.id},
@@ -239,15 +246,21 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/login", response_model=TokenResponse,
           dependencies=[Depends(limit_by_ip("login", RATE_LIMIT_AUTH_PER_MIN))])
 async def login(
+    http: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    db_factory=Depends(get_db_factory),
 ):
-    user = db.query(User).filter(User.email == form_data.username.strip().lower()).first()
+    email = form_data.username.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        audit(db_factory, "auth.login_failed", user_id=user.id if user else None, ip=client_ip(http),
+              details={"email_hmac": keyed_hash(email, SECRET_KEY)})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
+    audit(db_factory, "auth.login", user_id=user.id, ip=client_ip(http))
 
     token = create_access_token(
         data={"sub": user.id},
@@ -278,6 +291,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @app.post("/api/query", response_model=QueryResponse)
 async def process_query(
     request: QueryRequest,
+    http: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(limit_by_user("query", RATE_LIMIT_QUERY_PER_MIN)),
     db: Session = Depends(get_db),
@@ -328,10 +342,16 @@ async def process_query(
         set_cached_query(request.query, result, scope=current_user.id, language=language,
                          jurisdiction=request.jurisdiction, version=version)
 
-    # Log query in background
+    # Log query + audit in background (own sessions; no client text in the audit)
     background_tasks.add_task(
         log_query, db_factory, current_user.id, request.case_id,
         request.query, language, result, response_time
+    )
+    background_tasks.add_task(
+        audit, db_factory, "query.run", user_id=current_user.id,
+        resource=f"run:{result.get('run_id', '')}", ip=client_ip(http),
+        details={"case_id": request.case_id, "approval_status": result.get("approval_status"),
+                 "is_emergency": bool(result.get("is_emergency"))},
     )
 
     return _to_response(result, session_id, response_time)
@@ -358,11 +378,14 @@ async def _load_run_for(run_id: str, current_user: User, db: Session, *, review:
 @app.get("/api/approvals/{run_id}", response_model=QueryResponse)
 async def get_approval(
     run_id: str,
+    http: Request,
+    db_factory=Depends(get_db_factory),
     current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
     db: Session = Depends(get_db)
 ):
     """View a run's response and approval status (requester or eligible reviewer)."""
     run = await _load_run_for(run_id, current_user, db, review=False)
+    audit(db_factory, "approval.view", user_id=current_user.id, resource=f"run:{run_id}", ip=client_ip(http))
     return _to_response(run, run.get("session_id", ""), 0)
 
 
@@ -370,6 +393,8 @@ async def get_approval(
 async def decide_approval(
     run_id: str,
     request: ApprovalRequest,
+    http: Request,
+    db_factory=Depends(get_db_factory),
     current_user: User = Depends(limit_by_user("approval", RATE_LIMIT_APPROVAL_PER_MIN)),
     db: Session = Depends(get_db)
 ):
@@ -388,6 +413,10 @@ async def decide_approval(
         raise HTTPException(status_code=422, detail=e.errors(include_url=False, include_context=False))
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    audit(db_factory, "approval.decide", user_id=current_user.id, resource=f"run:{run_id}",
+          ip=client_ip(http), details={"decision": request.decision,
+                                       "edited": request.edited_response is not None,
+                                       "requester_id": run.get("user_id")})
     return _to_response(result, result.get("session_id", ""), 0)
 
 
@@ -398,7 +427,9 @@ def log_query(db_factory, user_id, case_id, query, language, result, response_ti
         log = QueryLog(
             user_id=user_id,
             case_id=case_id,
-            query=query,
+            query=query if STORE_QUERY_TEXT else None,
+            query_hmac=keyed_hash(query, SECRET_KEY),
+            query_chars=len(query),
             language=language,
             legal_domain=result.get("legal_domain", "general"),
             confidence_score=result.get("confidence_score", 0.5),
@@ -427,6 +458,8 @@ def get_owned_case(db: Session, case_id: str, user: User) -> Case:
 @app.post("/api/cases")
 async def create_case(
     request: CreateCaseRequest,
+    http: Request,
+    db_factory=Depends(get_db_factory),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -440,6 +473,7 @@ async def create_case(
     db.add(case)
     db.commit()
     db.refresh(case)
+    audit(db_factory, "case.create", user_id=current_user.id, resource=f"case:{case.id}", ip=client_ip(http))
     return {"id": case.id, "title": case.title, "status": "created"}
 
 
@@ -467,10 +501,13 @@ async def get_cases(
 @app.get("/api/cases/{case_id}")
 async def get_case(
     case_id: str,
+    http: Request,
+    db_factory=Depends(get_db_factory),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     case = get_owned_case(db, case_id, current_user)
+    audit(db_factory, "case.view", user_id=current_user.id, resource=f"case:{case_id}", ip=client_ip(http))
 
     return {
         "id": case.id,
@@ -487,10 +524,13 @@ async def get_case(
 @app.get("/api/documents/{case_id}")
 async def get_documents(
     case_id: str,
+    http: Request,
+    db_factory=Depends(get_db_factory),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     get_owned_case(db, case_id, current_user)
+    audit(db_factory, "documents.list", user_id=current_user.id, resource=f"case:{case_id}", ip=client_ip(http))
     docs = db.query(Document).filter(
         Document.case_id == case_id,
         Document.user_id == current_user.id

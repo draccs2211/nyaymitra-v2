@@ -16,6 +16,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGSMITH_TRACING"] = "false"
 # Test-only JWT key (forced, so tests never sign with the real one from .env)
 os.environ["SECRET_KEY"] = "test-only-secret-key-" + "x" * 40
+os.environ["APP_ENV"] = "test"
 
 _LLM_MODULES = (
     "backend.agents.guardian",

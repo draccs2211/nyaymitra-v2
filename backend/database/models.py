@@ -83,7 +83,9 @@ class QueryLog(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     case_id = Column(String, ForeignKey("cases.id"), nullable=True)
-    query = Column(Text, nullable=False)
+    query = Column(Text, nullable=True)            # raw text only if STORE_QUERY_TEXT=true
+    query_hmac = Column(String(64), index=True)    # HMAC-SHA256 of the query (correlation without text)
+    query_chars = Column(Integer)
     language = Column(String)
     legal_domain = Column(String)
     confidence_score = Column(Float)

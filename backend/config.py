@@ -13,10 +13,37 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY", "")
 INDIAN_KANOON_API_KEY = os.getenv("INDIAN_KANOON_API_KEY", "")
 INDIAN_KANOON_BASE_URL = "https://api.indiankanoon.org"
 
-# LangSmith
-LANGCHAIN_TRACING_V2 = os.getenv("LANGCHAIN_TRACING_V2", "true")
-LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY", "")
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "nyaymitra-v2")
+# Environment: "production" (default, strictest), "development" or "test".
+APP_ENV = os.getenv("APP_ENV", "production").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+
+
+def _truthy(value) -> bool:
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def configure_tracing(env=os.environ) -> dict:
+    """
+    LangSmith reads its settings from the environment. Tracing is only on if
+    LANGSMITH_TRACING / LANGCHAIN_TRACING_V2 is explicitly true. In production,
+    trace inputs/outputs (client facts, drafts) are hidden unless
+    LANGSMITH_ALLOW_RAW_TRACES=true; timings, errors and run structure remain.
+    """
+    enabled = _truthy(env.get("LANGSMITH_TRACING")) or _truthy(env.get("LANGCHAIN_TRACING_V2"))
+    production = env.get("APP_ENV", "production").strip().lower() == "production"
+    hide = enabled and production and not _truthy(env.get("LANGSMITH_ALLOW_RAW_TRACES"))
+    if hide:
+        env["LANGSMITH_HIDE_INPUTS"] = "true"
+        env["LANGSMITH_HIDE_OUTPUTS"] = "true"
+    return {"enabled": enabled, "hide_payloads": hide}
+
+
+TRACING = configure_tracing()
+
+# Data retention / minimisation (DPDP Act 2023)
+STORE_QUERY_TEXT = _truthy(os.getenv("STORE_QUERY_TEXT", "false"))   # raw client text in query_logs
+RETENTION_QUERY_LOG_DAYS = int(os.getenv("RETENTION_QUERY_LOG_DAYS", "90"))
+RETENTION_AUDIT_DAYS = int(os.getenv("RETENTION_AUDIT_DAYS", "365"))
 
 # Database
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
