@@ -10,7 +10,7 @@ verdicts), drafts documents, and routes anything risky to a senior for approval.
 
 ## How it works
 
-```
+```text
             ┌─ guardian ──────┐   urgency screening (LLM), never blocks
 request ──► │                 ├─► dispatch ─► research ─► analysis ─► drafting? ─► referral? ─► verification ─► human approval?
             └─ orchestrator ──┘   domain, requested actions, English search query
@@ -36,7 +36,7 @@ python -m backend.data_loader   # load the legal corpus (idempotent)
 uvicorn backend.main:app --reload --port 8000
 ```
 
-Open http://localhost:8000/docs. In development, open signup is enabled
+Open <http://localhost:8000/docs>. In development, open signup is enabled
 (`POST /api/auth/register`).
 
 > Tip (Windows): keep the virtualenv **outside OneDrive** — importing torch from a synced
