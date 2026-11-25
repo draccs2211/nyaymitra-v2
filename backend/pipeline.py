@@ -1,4 +1,4 @@
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, START, StateGraph
 from backend.state import NyayMitraState, initial_state
 from backend.agents.guardian import guardian_agent
 from backend.agents.orchestrator import orchestrator_agent
@@ -80,6 +80,11 @@ def human_approval_node(state: NyayMitraState) -> dict:
     ))
 
 
+def dispatch_node(state: NyayMitraState) -> dict:
+    """Join point after the parallel guardian + orchestrator; routing happens on its edges."""
+    return {}
+
+
 def get_checkpointer():
     """
     Checkpointer holding paused runs between interrupt and approval.
@@ -101,16 +106,17 @@ def build_graph(checkpointer=None):
     workflow.add_node("verification", verification_agent)
     workflow.add_node("referral", referral_agent)
     workflow.add_node("human_approval", human_approval_node)
+    workflow.add_node("dispatch", dispatch_node)
 
-    # Entry point
-    workflow.set_entry_point("guardian")
+    # Guardian (urgency) and orchestrator (classification) are independent LLM
+    # calls: run them in parallel, join at dispatch. Emergencies continue too.
+    workflow.add_edge(START, "guardian")
+    workflow.add_edge(START, "orchestrator")
+    workflow.add_edge(["guardian", "orchestrator"], "dispatch")
 
-    # Guardian flags urgency; pipeline always continues
-    workflow.add_edge("guardian", "orchestrator")   # emergencies continue too
-
-    # Orchestrator → research or referral only
+    # Dispatch → research or referral only
     workflow.add_conditional_edges(
-        "orchestrator",
+        "dispatch",
         route_after_orchestrator,
         {
             "research": "research",
@@ -207,6 +213,33 @@ async def get_run(run_id: str) -> Optional[dict]:
     if not snap.values:
         return None
     return await _snapshot_result(run_id)
+
+
+# Human-readable stage for progress UIs, keyed by the node about to run.
+STAGES = {
+    "guardian": "screening", "orchestrator": "classifying", "dispatch": "classifying",
+    "research": "researching", "analysis": "analysing", "drafting": "drafting",
+    "referral": "finding_legal_aid", "verification": "verifying", "human_approval": "awaiting_approval",
+}
+
+
+async def run_progress(run_id: str) -> Optional[dict]:
+    """
+    Lightweight progress for polling while a run executes. None if unknown.
+    status: running | awaiting_approval | completed
+    """
+    snap = await asyncio.to_thread(nyaymitra_graph.get_state, _config(run_id))
+    if not snap.values:
+        return None
+    nxt = list(snap.next or ())
+    if not nxt:
+        status, stage = "completed", "completed"
+    elif nxt == ["human_approval"] and snap.tasks and any(t.interrupts for t in snap.tasks):
+        status, stage = "awaiting_approval", "awaiting_approval"
+    else:
+        status, stage = "running", STAGES.get(nxt[0], nxt[0])
+    return {"run_id": run_id, "status": status, "stage": stage, "next": nxt,
+            "user_id": snap.values.get("user_id")}
 
 
 async def resume_pipeline(run_id: str, decision: dict) -> dict:

@@ -27,7 +27,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 FastAPI, LangGraph (interrupt + checkpointer), OpenAI gpt-4o-mini (NOT Groq), Pydantic, FastMCP (in-process client), ChromaDB + BM25 + RRF + Cohere rerank, sentence-transformers multilingual MiniLM, Redis (optional cache, circuit breaker), PostgreSQL/SQLAlchemy, JWT + bcrypt, LangSmith `@traceable`.
 
 ## Pipeline
-guardian (flags urgency, never stops) -> orchestrator (`requested_actions`, `search_query_en`) -> research | referral-only -> analysis -> drafting? -> referral? -> verification -> human_approval (interrupt when pending) -> END
+guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_query_en`) run in parallel -> dispatch -> research | referral-only -> analysis -> drafting? -> referral? -> verification -> human_approval (interrupt when pending) -> END
 
 ## Key modules
 - `backend/state.py` — `NyayMitraState` + `initial_state()` (single source of state keys)

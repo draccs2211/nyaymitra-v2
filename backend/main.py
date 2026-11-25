@@ -35,7 +35,7 @@ from backend.utils.cache import (
     store_session, get_session
 )
 from backend.utils.language_detector import detect_language
-from backend.pipeline import run_pipeline, resume_pipeline, get_run
+from backend.pipeline import get_run, resume_pipeline, run_pipeline, run_progress
 from pydantic import ValidationError
 from dotenv import load_dotenv
 
@@ -149,6 +149,9 @@ class QueryRequest(BaseModel):
     # retrieval does not filter by it yet.
     jurisdiction: str = Field(default="IN", pattern=r"^IN(-[A-Z]{2})?$")
     session_id: Optional[str] = Field(default=None, max_length=100)
+    # Optional client-chosen run id (UUID) so a UI can poll GET /api/runs/{run_id} meanwhile
+    run_id: Optional[str] = Field(
+        default=None, pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     case_id: Optional[str] = Field(default=None, max_length=100)
 
 class QueryResponse(BaseModel):
@@ -473,9 +476,13 @@ async def process_query(
             detail="Daily AI usage limit reached for your firm. It resets at 00:00 UTC.",
         )
 
+    if request.run_id and await get_run(request.run_id) is not None:
+        raise HTTPException(status_code=409, detail="run_id already used")
+
     # Run pipeline
     try:
         result = await run_pipeline(
+            run_id=request.run_id,
             query=request.query,
             session_id=session_id,
             user_id=current_user.id,
@@ -524,6 +531,18 @@ async def process_query(
     )
 
     return _to_response(result, session_id, response_time)
+
+
+@app.get("/api/runs/{run_id}")
+async def get_run_progress(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Progress of the caller's own run (poll while POST /api/query is in flight)."""
+    progress = await run_progress(run_id)
+    if progress is None or progress.pop("user_id", None) != current_user.id:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return progress
 
 
 # ─── Approval Routes ──────────────────────────────────────────────────────────
