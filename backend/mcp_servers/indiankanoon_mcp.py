@@ -20,7 +20,8 @@ async def search_case_laws(
 
     Args:
         query: Legal query or keywords
-        court: Optional court filter (SC, HC, District)
+        court: Optional Indian Kanoon doctypes filter, comma-separated
+               (e.g. "supremecourt", "allahabad", "highcourts")
         year_from: Optional start year filter
         year_to: Optional end year filter
         max_results: Number of results to return (max 10)
@@ -43,16 +44,17 @@ async def search_case_laws(
     try:
         params = {"formInput": query, "pagenum": 0}
         if court:
-            params["formInput"] += f" docsource:{court}"
+            params["formInput"] += f" doctypes:{court}"      # documented filter operator
         if year_from:
             params["formInput"] += f" fromdate:01-01-{year_from}"
         if year_to:
             params["formInput"] += f" todate:31-12-{year_to}"
 
-        headers = {"Authorization": f"Token {INDIAN_KANOON_API_KEY}"}
+        headers = {"Authorization": f"Token {INDIAN_KANOON_API_KEY}", "Accept": "application/json"}
 
+        # API docs show POST with the query in the URL; billed per result page returned
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
+            response = await client.post(
                 f"{INDIAN_KANOON_BASE_URL}/search/",
                 params=params,
                 headers=headers
@@ -121,9 +123,9 @@ async def get_case_details(tid: str) -> dict:
         return {"status": "error", "code": "not_configured", "message": "API key not configured"}
 
     try:
-        headers = {"Authorization": f"Token {INDIAN_KANOON_API_KEY}"}
+        headers = {"Authorization": f"Token {INDIAN_KANOON_API_KEY}", "Accept": "application/json"}
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
+            response = await client.post(
                 f"{INDIAN_KANOON_BASE_URL}/doc/{tid}/",
                 headers=headers
             )

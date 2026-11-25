@@ -195,3 +195,58 @@ class TestVerificationNotesMissingCaseLaw:
         out = verification_agent(make_state(final_response="x" * 300,
                                             source_status={"indian_kanoon": "ok"}))
         assert not any("no case law" in s for s in out["verified_sources"])
+
+
+# ─── Indian Kanoon HTTP contract (fake transport, no network, no cost) ───────
+
+class TestIndianKanoonRequests:
+    @pytest.fixture
+    def kanoon(self, monkeypatch):
+        from backend.mcp_servers import indiankanoon_mcp as ik
+        sent = []
+
+        class FakeResponse:
+            status_code = 200
+
+            def json(self):
+                return {"found": "1", "docs": [{"tid": 123, "title": "A v B", "headline": "deposit",
+                                                "docsource": "Allahabad High Court"}]}
+
+        class FakeClient:
+            def __init__(self, **kw):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def post(self, url, params=None, headers=None):
+                sent.append({"method": "POST", "url": url, "params": params or {}, "headers": headers})
+                return FakeResponse()
+
+            async def get(self, *a, **kw):
+                raise AssertionError("Indian Kanoon API must be called with POST")
+
+        monkeypatch.setattr(ik, "INDIAN_KANOON_API_KEY", "test-token")
+        monkeypatch.setattr(ik.httpx, "AsyncClient", FakeClient)
+        return ik, sent
+
+    @pytest.mark.asyncio
+    async def test_search_uses_post_token_and_doctypes(self, kanoon):
+        ik, sent = kanoon
+        out = await ik.search_case_laws("security deposit", court="allahabad", year_from=2015, year_to=2020)
+        req, = sent
+        assert req["method"] == "POST" and req["url"].endswith("/search/")
+        assert req["headers"]["Authorization"] == "Token test-token"
+        q = req["params"]["formInput"]
+        assert "doctypes:allahabad" in q and "docsource:" not in q
+        assert "fromdate:01-01-2015" in q and "todate:31-12-2020" in q
+        assert out["status"] == "success" and out["results"][0]["url"] == "https://indiankanoon.org/doc/123"
+
+    @pytest.mark.asyncio
+    async def test_doc_details_uses_post(self, kanoon):
+        ik, sent = kanoon
+        await ik.get_case_details("123")
+        assert sent[0]["method"] == "POST" and sent[0]["url"].endswith("/doc/123/")
