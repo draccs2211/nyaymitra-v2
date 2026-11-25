@@ -87,7 +87,10 @@ RATE_LIMIT_AUTH_PER_MIN = int(os.getenv("RATE_LIMIT_AUTH_PER_MIN", "10"))
 RATE_LIMIT_QUERY_PER_MIN = int(os.getenv("RATE_LIMIT_QUERY_PER_MIN", "20"))
 RATE_LIMIT_APPROVAL_PER_MIN = int(os.getenv("RATE_LIMIT_APPROVAL_PER_MIN", "60"))
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(8 * 60)))   # 8 h
+INVITE_TTL_DAYS = int(os.getenv("INVITE_TTL_DAYS", "7"))
+# B2B: production registration is invite-only unless explicitly opened
+ALLOW_OPEN_SIGNUP = _truthy(os.getenv("ALLOW_OPEN_SIGNUP", "false" if IS_PRODUCTION else "true"))
 
 # RAG
 EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

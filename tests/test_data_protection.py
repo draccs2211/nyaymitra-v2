@@ -178,7 +178,7 @@ class TestPurge:
         db.commit(); db.close()
 
         dry = purge(client.Session, query_log_days=90, audit_days=365, dry_run=True, now=now)
-        assert dry == {"query_logs": 1, "audit_logs": 1}
+        assert dry == {"query_logs": 1, "audit_logs": 1, "revoked_tokens": 0}
         assert len(_rows(client, QueryLog)) == 2                       # dry run kept everything
 
         assert purge(client.Session, query_log_days=90, audit_days=365, now=now) == dry

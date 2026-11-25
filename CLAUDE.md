@@ -9,6 +9,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - `.env` must contain `SECRET_KEY` (>= 32 random chars) or the API refuses to start.
 - `APP_ENV` defaults to `production` (traces hide client text, strictest settings); set `APP_ENV=development` locally.
 - Data minimisation: `STORE_QUERY_TEXT` (default false), `RETENTION_QUERY_LOG_DAYS` (90), `RETENTION_AUDIT_DAYS` (365).
+- Auth: production is invite-only (`ALLOW_OPEN_SIGNUP` default false in prod, true in dev); tokens last 8 h (`ACCESS_TOKEN_EXPIRE_MINUTES`).
 
 ## Commands
 - Install: `pip install -r requirements.txt` (unpinned versions on purpose)
@@ -19,6 +20,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - Paid tests (real OpenAI, ask first): `pytest -m paid`
 - Retrieval eval (local, free): `python -m backend.evaluation.retrieval_eval`
 - Retention purge (run daily): `python -m backend.maintenance purge [--dry-run]`
+- Onboard a firm (prod): `python -m backend.maintenance create-firm --name "..." --admin-email ...` (prints one-time admin invite)
 - DB migrations: `alembic upgrade head` (required in production; `/ready` is 503 until applied). After changing `backend/database/models.py`: `alembic revision --autogenerate -m "..."` (tests fail if models and migrations differ)
 
 ## Stack

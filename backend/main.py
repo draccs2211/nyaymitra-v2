@@ -7,14 +7,14 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
 from contextlib import asynccontextmanager
 from typing import Literal, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import re
 import uuid
 import time
 
 from backend.config import (
-    ACCESS_TOKEN_EXPIRE_MINUTES, CORS_ORIGINS, DAILY_TOKEN_BUDGET, IS_PRODUCTION, STORE_QUERY_TEXT,
+    ALLOW_OPEN_SIGNUP, CORS_ORIGINS, DAILY_TOKEN_BUDGET, IS_PRODUCTION, STORE_QUERY_TEXT,
     RATE_LIMIT_APPROVAL_PER_MIN, RATE_LIMIT_AUTH_PER_MIN, RATE_LIMIT_QUERY_PER_MIN,
 )
 from backend.database.connection import get_db, get_db_factory, init_db
@@ -23,10 +23,12 @@ from backend.utils.rate_limit import limit_by_ip, limit_by_user
 from backend.utils.redact import keyed_hash
 from backend.logging_config import request_id_var, setup_logging
 from backend.versioning import cache_version
-from backend.database.models import Approval, User, Firm, Case, Document, QueryLog
+from backend.database.models import Approval, User, Firm, Case, Document, QueryLog, RevokedToken
+from backend.api.firms import router as firms_router
+from backend.utils.invites import InviteError, find_usable_invite
 from backend.utils.auth import (
     SECRET_KEY, verify_password, get_password_hash,
-    create_access_token, get_current_user
+    get_current_user, get_token_claims, issue_token
 )
 from backend.utils.cache import (
     get_cached_query, set_cached_query,
@@ -76,6 +78,8 @@ app = FastAPI(
     version="2.0.0"
 )
 
+app.include_router(firms_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,          # explicit allow-list, never "*"
@@ -120,6 +124,7 @@ class RegisterRequest(BaseModel):
     email: str = Field(max_length=254)
     password: str
     firm_name: Optional[str] = Field(default=None, max_length=200)
+    invite_token: Optional[str] = Field(default=None, max_length=200)
 
     @field_validator("email")
     @classmethod
@@ -313,36 +318,44 @@ async def ready(db: Session = Depends(get_db)):
           dependencies=[Depends(limit_by_ip("register", RATE_LIMIT_AUTH_PER_MIN))])
 async def register(request: RegisterRequest, http: Request,
                    db: Session = Depends(get_db), db_factory=Depends(get_db_factory)):
-    # Check if email exists
     existing = db.query(User).filter(User.email == request.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Create firm if provided
+    invite = None
     firm = None
-    if request.firm_name:
-        firm = Firm(name=request.firm_name, email=request.email)
-        db.add(firm)
-        db.flush()
+    if request.invite_token:
+        try:
+            invite = find_usable_invite(db, request.invite_token, request.email)
+        except InviteError:
+            raise HTTPException(status_code=400, detail="Invalid or expired invite")
+        firm_id, role = invite.firm_id, invite.role
+    elif ALLOW_OPEN_SIGNUP:
+        if request.firm_name:
+            firm = Firm(name=request.firm_name, email=request.email)
+            db.add(firm)
+            db.flush()
+        firm_id, role = (firm.id if firm else None), ("admin" if firm else "associate")
+    else:
+        raise HTTPException(status_code=403, detail="Registration is by invitation only")
 
-    # Create user
     user = User(
         name=request.name,
         email=request.email,
         hashed_password=get_password_hash(request.password),
-        firm_id=firm.id if firm else None,
-        role="admin" if firm else "associate"
+        firm_id=firm_id,
+        role=role,
     )
     db.add(user)
+    db.flush()
+    if invite is not None:
+        invite.used_at, invite.used_by = datetime.utcnow(), user.id
     db.commit()
     db.refresh(user)
     audit(db_factory, "auth.register", user_id=user.id, ip=client_ip(http),
-          details={"role": user.role, "created_firm": firm is not None})
+          details={"role": user.role, "created_firm": firm is not None, "via_invite": invite is not None})
 
-    token = create_access_token(
-        data={"sub": user.id},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    token = issue_token(user)
 
     return TokenResponse(
         access_token=token,
@@ -362,7 +375,7 @@ async def login(
 ):
     email = form_data.username.strip().lower()
     user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if not user or not user.is_active or not verify_password(form_data.password, user.hashed_password):
         audit(db_factory, "auth.login_failed", user_id=user.id if user else None, ip=client_ip(http),
               details={"email_hmac": keyed_hash(email, SECRET_KEY)})
         raise HTTPException(
@@ -371,10 +384,7 @@ async def login(
         )
     audit(db_factory, "auth.login", user_id=user.id, ip=client_ip(http))
 
-    token = create_access_token(
-        data={"sub": user.id},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    token = issue_token(user)
 
     return TokenResponse(
         access_token=token,
@@ -393,6 +403,37 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "role": current_user.role,
         "firm_id": current_user.firm_id
     }
+
+
+@app.post("/api/auth/logout")
+async def logout(
+    http: Request,
+    claims: dict = Depends(get_token_claims),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    db_factory=Depends(get_db_factory),
+):
+    """Revoke the token used for this request."""
+    jti = claims.get("jti")
+    if jti and db.get(RevokedToken, jti) is None:
+        db.add(RevokedToken(jti=jti, expires_at=datetime.utcfromtimestamp(int(claims["exp"]))))
+        db.commit()
+    audit(db_factory, "auth.logout", user_id=current_user.id, ip=client_ip(http))
+    return {"status": "logged_out"}
+
+
+@app.post("/api/auth/logout-all")
+async def logout_all(
+    http: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    db_factory=Depends(get_db_factory),
+):
+    """Revoke every token of the current user (e.g. lost device)."""
+    current_user.token_version = (current_user.token_version or 0) + 1
+    db.commit()
+    audit(db_factory, "auth.logout_all", user_id=current_user.id, ip=client_ip(http))
+    return {"status": "logged_out_everywhere"}
 
 
 # ─── Query Routes ─────────────────────────────────────────────────────────────

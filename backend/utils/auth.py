@@ -2,12 +2,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 import bcrypt
+import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from backend.config import ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, require_secret_key
 from backend.database.connection import get_db
-from backend.database.models import User
+from backend.database.models import RevokedToken, User
 
 SECRET_KEY = require_secret_key()   # raises at startup if missing/weak
 
@@ -37,30 +38,55 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Signed JWT with exp, iat and a unique jti (for individual revocation)."""
+    now = datetime.utcnow()
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": now + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)),
+        "iat": now,
+        "jti": uuid.uuid4().hex,
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
-) -> User:
-    credentials_exception = HTTPException(
+def issue_token(user: User) -> str:
+    """Access token bound to the user's current token_version."""
+    return create_access_token({"sub": user.id, "tv": user.token_version or 0})
+
+
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def get_token_claims(token: str = Depends(oauth2_scheme)) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
     except JWTError:
-        raise credentials_exception
+        raise _credentials_exception()
+    if not payload.get("sub"):
+        raise _credentials_exception()
+    return payload
 
-    user = db.query(User).filter(User.id == user_id).first()
+
+def get_current_user(
+    claims: dict = Depends(get_token_claims),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Valid only if: signature/expiry OK, jti not revoked (logout), user active,
+    and the token's version matches the user's (logout-all / role change).
+    Tokens without "tv" count as version 0.
+    """
+    jti = claims.get("jti")
+    if jti and db.get(RevokedToken, jti) is not None:
+        raise _credentials_exception()
+    user = db.query(User).filter(User.id == claims["sub"]).first()
     if user is None or not user.is_active:
-        raise credentials_exception
+        raise _credentials_exception()
+    if int(claims.get("tv", 0)) != (user.token_version or 0):
+        raise _credentials_exception()
     return user

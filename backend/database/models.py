@@ -34,11 +34,37 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="associate")   # admin, senior, associate
     is_active = Column(Boolean, default=True)
+    # Bumped on logout-all / role change / deactivation: invalidates every older token
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     firm = relationship("Firm", back_populates="users")
     cases = relationship("Case", back_populates="user")
     queries = relationship("QueryLog", back_populates="user")
+
+
+class Invite(Base):
+    """One-time firm invitation. Only the SHA-256 of the token is stored."""
+    __tablename__ = "invites"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    firm_id = Column(String, ForeignKey("firms.id"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False)
+    created_by = Column(String, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    used_by = Column(String, ForeignKey("users.id"), nullable=True)
+
+
+class RevokedToken(Base):
+    """Individually revoked JWTs (logout). Rows can be purged after expires_at."""
+    __tablename__ = "revoked_tokens"
+
+    jti = Column(String, primary_key=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class Case(Base):
