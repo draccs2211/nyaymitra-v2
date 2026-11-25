@@ -91,9 +91,9 @@ class HybridRAG:
             }
             with open(self._bm25_cache_path(), "wb") as f:
                 pickle.dump(cache, f)
-            print(f"[BM25] Index saved — {len(self.bm25_docs)} docs")
+            logger.info(f"BM25 index saved — {len(self.bm25_docs)} docs")
         except Exception as e:
-            print(f"[BM25] Save failed: {e}")
+            logger.warning(f"BM25 save failed: {e}")
 
     def _load_bm25_index(self):
         """Load BM25 index from disk if available."""
@@ -104,16 +104,16 @@ class HybridRAG:
             with open(path, "rb") as f:
                 cache = pickle.load(f)
             if cache.get("tokenizer") != TOKENIZER_VERSION:
-                print("[BM25] Cached index uses an old tokenizer — will rebuild")
+                logger.warning("Cached BM25 index uses an old tokenizer — will rebuild")
                 return
             self.bm25_index = cache["index"]
             self.bm25_docs = cache["docs"]
             self.bm25_id_map = cache["id_map"]
             self.bm25_ids = cache["ids"]
             self.bm25_metas = cache.get("metas") or [{} for _ in self.bm25_ids]
-            print(f"[BM25] Index loaded from disk — {len(self.bm25_docs)} docs")
+            logger.info(f"BM25 index loaded from disk — {len(self.bm25_docs)} docs")
         except Exception as e:
-            print(f"[BM25] Load failed: {e}")
+            logger.warning(f"BM25 load failed: {e}")
 
     def build_bm25_index(self, docs: List[Dict]):
         """
@@ -140,7 +140,7 @@ class HybridRAG:
         else:
             self.bm25_index = None
         self._save_bm25_index()
-        print(f"[BM25] Index built — {len(self.bm25_docs)} docs")
+        logger.info(f"BM25 index built — {len(self.bm25_docs)} docs")
 
     def rebuild_bm25_from_chroma(self):
         """Rebuild BM25 from the full Chroma collection so both stay in sync."""
@@ -259,7 +259,7 @@ class HybridRAG:
         for q in distinct:
             lists.append(self.dense_search(q, top_k))
             lists.append(self.sparse_search(q, top_k))
-        print(f"[RAG] queries={len(distinct)} lists={[len(x) for x in lists]}")
+        logger.info(f"Hybrid retrieval: queries={len(distinct)} lists={[len(x) for x in lists]}")
         return self.fuse(lists)
 
     # ── Reranking ─────────────────────────────────────────────────────────────
@@ -379,7 +379,7 @@ class HybridRAG:
         # BM25 mirrors the FULL collection, not just this batch
         self.rebuild_bm25_from_chroma()
 
-        print(f"[RAG] Upserted {len(ids)} docs — ChromaDB + BM25 in sync ✅")
+        logger.info(f"Upserted {len(ids)} docs — ChromaDB + BM25 in sync ✅")
 
     def delete_ids_not_in(self, keep_ids: List[str]) -> int:
         """Remove docs whose IDs aren't in keep_ids (stale/legacy). Returns count removed."""

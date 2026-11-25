@@ -6,6 +6,9 @@ from backend.state import NyayMitraState, initial_state
 from backend.config import CONFIDENCE_THRESHOLD
 from backend.agents.schemas import VerificationOutput, to_state
 from langsmith import traceable
+import logging
+
+logger = logging.getLogger("nyaymitra.verification")
 from typing import List, Dict
 import re
 
@@ -135,7 +138,7 @@ def verification_agent(state: NyayMitraState) -> dict:
         bool(draft_document)
     )
 
-    print(f"[Verification] Confidence: {confidence} | Hallucination: {hallucination_detected} | Human approval: {human_approval_needed}")
+    logger.info(f"Verification: confidence={confidence} | Hallucination: {hallucination_detected} | Human approval: {human_approval_needed}")
 
     return to_state(VerificationOutput(
         confidence_score=confidence,

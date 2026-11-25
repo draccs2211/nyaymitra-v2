@@ -9,6 +9,9 @@ from backend.agents.schemas import (
     ClassificationLLMOutput, ClassificationMeta, OrchestratorOutput, to_state
 )
 from langsmith import traceable
+import logging
+
+logger = logging.getLogger("nyaymitra.orchestrator")
 from openai import OpenAI
 from pydantic import ValidationError
 import json
@@ -96,8 +99,8 @@ Classify this query and return JSON."""
                                 max_tokens=500, temperature=0.1)
         result = ClassificationLLMOutput.model_validate(data)
 
-        print(f"[Orchestrator] Domain: {result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Actions: {result.requested_actions}")
-        print(f"[Orchestrator] Reasoning: {result.reasoning}")
+        logger.info(f"Classified: domain={result.legal_domain} | Lang: {result.language} | Urgency: {result.urgency} | Actions: {result.requested_actions}")
+        logger.debug("Classification reasoning: %s", result.reasoning)
 
         return to_state(OrchestratorOutput(
             legal_domain=result.legal_domain,
@@ -114,11 +117,11 @@ Classify this query and return JSON."""
         ))
 
     except (json.JSONDecodeError, ValidationError) as e:
-        print(f"[Orchestrator] Invalid LLM output: {e}")
+        logger.warning(f"Invalid LLM output: {e}")
         return _fallback_classification(query)
 
     except Exception as e:
-        print(f"[Orchestrator] Error: {e}")
+        logger.warning(f"Classification failed: {e}")
         return _fallback_classification(query)
 
 
@@ -132,7 +135,7 @@ def _fallback_classification(query: str) -> dict:
     else:
         language = "en"
 
-    print("[Orchestrator] Using fallback classification")
+    logger.warning("Using fallback classification")
 
     return to_state(OrchestratorOutput(
         legal_domain="general",

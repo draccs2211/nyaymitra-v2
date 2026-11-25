@@ -11,6 +11,9 @@ from backend.llm import Usage, chat_json
 from backend.agents.schemas import DraftFields, DraftingOutput, DraftLLMOutput, to_state
 from backend.utils.citations import cited_numbers, find_unverified_citations, research_context  # noqa: F401
 from langsmith import traceable
+import logging
+
+logger = logging.getLogger("nyaymitra.drafting")
 from openai import OpenAI
 from datetime import datetime
 import json
@@ -439,7 +442,7 @@ def drafting_agent(state: NyayMitraState) -> dict:
         fields, u = extract_fields(state)
         usage += u
     except Exception as e:
-        print(f"[Drafting] Extraction failed: {e}")
+        logger.warning(f"Extraction failed: {e}")
         fields = DraftFields()
 
     doc_type = fields.document_type
@@ -464,7 +467,7 @@ def drafting_agent(state: NyayMitraState) -> dict:
         draft = DraftLLMOutput.model_validate(data)
         doc_english, doc_hindi = draft.english, draft.hindi
     except Exception as e:
-        print(f"[Drafting] LLM drafting failed, using template: {e}")
+        logger.warning(f"LLM drafting failed, using template: {e}")
         method = "template_fallback"
         doc_english, doc_hindi = template_fallback(fields)
 
@@ -472,7 +475,7 @@ def drafting_agent(state: NyayMitraState) -> dict:
     missing = missing_fields(fields)
     draft_doc = doc_hindi if language == "hi" else doc_english
 
-    print(f"[Drafting] type={doc_type} method={method} missing={missing} unverified={unverified}")
+    logger.info(f"Draft: type={doc_type} method={method} missing={missing} unverified={unverified}")
 
     return to_state(DraftingOutput(
         draft_document=draft_doc,

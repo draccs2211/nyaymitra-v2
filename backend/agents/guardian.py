@@ -12,6 +12,9 @@ from backend.state import NyayMitraState, initial_state
 from backend.llm import chat_json
 from backend.agents.schemas import GuardianLLMOutput, GuardianOutput, to_state
 from langsmith import traceable
+import logging
+
+logger = logging.getLogger("nyaymitra.guardian")
 from openai import OpenAI
 
 # ─── Urgency Levels ───────────────────────────────────────────────────────────
@@ -220,7 +223,7 @@ def guardian_agent(state: NyayMitraState) -> dict:
     try:
         result, usage = classify_urgency(query)
     except Exception as e:
-        print(f"[Guardian] Classification unavailable: {e}")
+        logger.warning(f"Classification unavailable: {e}")
         return to_state(GuardianOutput(
             is_emergency=False, emergency_type="", urgency_level="",
             urgent_alert="", guardian_status="unavailable",
@@ -233,7 +236,8 @@ def guardian_agent(state: NyayMitraState) -> dict:
         ))
 
     urgency_level = URGENCY_LEVELS.get(result.emergency_type, "MEDIUM")
-    print(f"[Guardian] Emergency: {result.emergency_type} ({urgency_level}) — {result.reasoning}")
+    logger.warning("Emergency flagged: %s (%s)", result.emergency_type, urgency_level)
+    logger.debug("Guardian reasoning: %s", result.reasoning)
     return to_state(GuardianOutput(
         is_emergency=True,
         emergency_type=result.emergency_type,

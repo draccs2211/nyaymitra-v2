@@ -14,6 +14,9 @@ import re
 from typing import Dict, List, Tuple
 
 from langsmith import traceable
+import logging
+
+logger = logging.getLogger("nyaymitra.research")
 
 from backend.agents.schemas import KanoonCase, ResearchOutput, RetrievedDoc, to_state
 from backend.mcp_client import MCPCallError, call_tool, run_sync
@@ -58,7 +61,7 @@ async def _search_case_law(query: str) -> Tuple[List[dict], str]:
         data = await call_tool("indiankanoon", "search_case_laws",
                                {"query": query, "max_results": MAX_KANOON_RESULTS})
     except MCPCallError as e:
-        print(f"[Research] Indian Kanoon unavailable: {e}")
+        logger.warning(f"Indian Kanoon unavailable: {e}")
         return [], "unavailable"
     if data.get("status") != "success":
         return [], "not_configured" if data.get("code") == "not_configured" else "error"
@@ -73,7 +76,7 @@ async def _lookup_ipc(section: str) -> Tuple[dict, str]:
     try:
         data = await call_tool("legal_reference", "get_ipc_section", {"section_number": section})
     except MCPCallError as e:
-        print(f"[Research] legal_reference unavailable for {section}: {e}")
+        logger.warning(f"legal_reference unavailable for {section}: {e}")
         return {}, "unavailable"
     if data.get("status") != "found":
         return {}, "ok"          # server answered; section just isn't in its quick reference
@@ -135,7 +138,7 @@ def research_agent(state: NyayMitraState) -> dict:
         "indian_kanoon": kanoon_status,
         "legal_reference": _combine([s for _, s in ipc_lookups]),
     }
-    print(f"[Research] RAG={len(rag_results)} kanoon={len(kanoon_cases)} "
+    logger.info(f"RAG={len(rag_results)} kanoon={len(kanoon_cases)} "
           f"ipc_lookups={sections} status={source_status}")
 
     return to_state(ResearchOutput(

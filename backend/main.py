@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import func
+from fastapi.responses import JSONResponse
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
@@ -18,7 +19,8 @@ from backend.config import (
 from backend.database.connection import get_db, get_db_factory, init_db
 from backend.utils.audit import audit, client_ip
 from backend.utils.rate_limit import limit_by_ip, limit_by_user
-from backend.utils.redact import install_redaction, keyed_hash
+from backend.utils.redact import keyed_hash
+from backend.logging_config import request_id_var, setup_logging
 from backend.versioning import cache_version
 from backend.database.models import User, Firm, Case, Document, QueryLog
 from backend.utils.auth import (
@@ -36,9 +38,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-install_redaction()     # mask emails / phones / Aadhaar / PAN in every log line
+setup_logging()          # JSON in production, request IDs, PII redaction on every line
 logger = logging.getLogger("nyaymitra.api")
+access_logger = logging.getLogger("nyaymitra.access")
 
 app = FastAPI(
     title="NyayMitra 2.0 API",
@@ -53,6 +55,31 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Request ID (accepts a sane X-Request-ID, else generates one) + access log."""
+    incoming = request.headers.get("x-request-id", "")
+    rid = incoming if _REQUEST_ID_RE.match(incoming) else uuid.uuid4().hex
+    token = request_id_var.set(rid)
+    start = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        access_logger.info(
+            "%s %s -> %s", request.method, request.url.path, status_code,
+            extra={"method": request.method, "path": request.url.path, "status": status_code,
+                   "duration_ms": round((time.perf_counter() - start) * 1000, 1)},
+        )
+        request_id_var.reset(token)
 
 
 # ─── Pydantic Models ────────────────────────────────────────────────────────
@@ -179,9 +206,9 @@ def can_review(reviewer: User, requester: User) -> bool:
 async def startup():
     try:
         init_db()
-        print("✅ Database initialized")
+        logger.info("Database initialized")
     except Exception as e:
-        print(f"⚠️ Database init skipped: {e}")
+        logger.warning("Database init skipped: %s", e)
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
@@ -198,7 +225,51 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "version": "2.0.0"}
+    """Liveness: the process is up. No dependency checks (cheap, for restarts)."""
+    return {"status": "ok", "version": "2.0.0"}
+
+
+def _check_database(db: Session) -> dict:
+    try:
+        db.execute(text("SELECT 1"))
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+
+
+def _check_corpus() -> dict:
+    try:
+        from backend.rag.hybrid_search import hybrid_rag
+        count = hybrid_rag.collection.count()
+        return {"ok": count > 0, "documents": count}
+    except Exception as e:
+        return {"ok": False, "error": type(e).__name__}
+
+
+@app.get("/ready")
+async def ready(db: Session = Depends(get_db)):
+    """
+    Readiness: can this instance serve queries? 503 if a required dependency
+    (database, loaded corpus, OpenAI key) is missing. Optional ones (Redis,
+    Cohere, Indian Kanoon) only mark the response "degraded".
+    """
+    from backend.config import COHERE_API_KEY, INDIAN_KANOON_API_KEY, OPENAI_API_KEY
+    from backend.utils.cache import redis_available
+    required = {
+        "database": _check_database(db),
+        "corpus": _check_corpus(),
+        "openai_key": {"ok": bool(OPENAI_API_KEY)},
+    }
+    optional = {
+        "redis": {"ok": redis_available()},
+        "cohere_rerank": {"ok": bool(COHERE_API_KEY)},
+        "indian_kanoon": {"ok": bool(INDIAN_KANOON_API_KEY)},
+    }
+    is_ready = all(c["ok"] for c in required.values())
+    status_text = "ready" if is_ready and all(c["ok"] for c in optional.values()) else (
+        "degraded" if is_ready else "not_ready")
+    body = {"status": status_text, "checks": {**required, **optional}}
+    return JSONResponse(status_code=200 if is_ready else 503, content=body)
 
 
 # ─── Auth Routes ──────────────────────────────────────────────────────────────
@@ -340,6 +411,11 @@ async def process_query(
         raise HTTPException(status_code=500, detail="Internal error while processing the query")
 
     response_time = int((time.time() - start_time) * 1000)
+    logger.info("Query completed", extra={
+        "run_id": result.get("run_id"), "user_id": current_user.id, "latency_ms": response_time,
+        "tokens_used": int(result.get("tokens_used") or 0), "approval_status": result.get("approval_status"),
+        "legal_domain": result.get("legal_domain"), "is_emergency": bool(result.get("is_emergency")),
+    })
 
     # Update conversation history
     conversation_history.append({"role": "user", "content": request.query})
