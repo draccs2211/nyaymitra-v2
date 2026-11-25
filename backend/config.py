@@ -94,6 +94,10 @@ EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 CHROMA_PERSIST_DIR = "./data/chroma_db"
 TOP_K_RESULTS = 10
 RERANK_TOP_K = 5
+# rerank-multilingual-v2.0 was sunset by Cohere (Dec 2025). Rerank 5 is current; "fast" tier
+# for per-query latency/cost. Override if needed: rerank-v5.0-pro, rerank-v4.0-fast, rerank-v3.5.
+COHERE_RERANK_MODEL = os.getenv("COHERE_RERANK_MODEL", "rerank-v5.0-fast")
+RERANK_DISABLE_SECONDS = float(os.getenv("RERANK_DISABLE_SECONDS", "600"))
 
 # Confidence
 CONFIDENCE_THRESHOLD = 0.70

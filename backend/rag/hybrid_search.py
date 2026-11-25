@@ -9,13 +9,17 @@ from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
 from backend.config import (
     EMBEDDING_MODEL, CHROMA_PERSIST_DIR,
-    TOP_K_RESULTS, RERANK_TOP_K, COHERE_API_KEY
+    TOP_K_RESULTS, RERANK_TOP_K, COHERE_API_KEY, COHERE_RERANK_MODEL, RERANK_DISABLE_SECONDS
 )
 from backend.rag.metadata import DocMetadata
 import cohere
+import logging
 import pickle
 import os
 import re
+import time
+
+logger = logging.getLogger("nyaymitra.rag")
 
 # Bump when tokenize() changes: a cached BM25 index built with an older
 # tokenizer is discarded and rebuilt from Chroma.
@@ -37,6 +41,8 @@ class HybridRAG:
         self.embedding_model = SentenceTransformer(EMBEDDING_MODEL)
         self.chroma_client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
         self.cohere_client = cohere.Client(COHERE_API_KEY) if COHERE_API_KEY else None
+        self.rerank_model = COHERE_RERANK_MODEL
+        self._rerank_disabled_until = 0.0   # set after a failure; avoids a failing call per query
 
         # ── CANONICAL ID FIX ──────────────────────────────────────────────────
         # BM25 aur ChromaDB same canonical IDs use karenge
@@ -264,18 +270,21 @@ class HybridRAG:
         docs: List[Dict],
         top_k: int = RERANK_TOP_K
     ) -> List[Dict]:
-        """Cohere reranking for better accuracy."""
+        """
+        Cohere reranking. On any failure (sunset model, quota, network) falls back
+        to RRF order and skips Cohere for RERANK_DISABLE_SECONDS.
+        """
         if not docs:
             return docs
 
-        if self.cohere_client:
+        if self.cohere_client and time.monotonic() >= self._rerank_disabled_until:
             try:
                 texts = [d["content"][:512] for d in docs]
                 response = self.cohere_client.rerank(
                     query=query,
                     documents=texts,
                     top_n=min(top_k, len(docs)),
-                    model="rerank-multilingual-v2.0"
+                    model=self.rerank_model,
                 )
                 reranked = []
                 for r in response.results:
@@ -284,7 +293,12 @@ class HybridRAG:
                     reranked.append(doc)
                 return reranked
             except Exception as e:
-                print(f"[Rerank] Cohere failed: {e} — using RRF order")
+                self._rerank_disabled_until = time.monotonic() + RERANK_DISABLE_SECONDS
+                status = getattr(e, "status_code", None)
+                detail = getattr(e, "body", None) or str(e)
+                logger.warning("Cohere rerank failed (model=%s, status=%s): %s — RRF order used, "
+                               "rerank paused %.0fs", self.rerank_model, status,
+                               str(detail)[:200], RERANK_DISABLE_SECONDS)
 
         return docs[:top_k]
 
