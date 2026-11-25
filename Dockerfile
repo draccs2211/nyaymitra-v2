@@ -12,11 +12,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# CPU-only torch first (the default Linux wheel pulls multi-GB CUDA libraries),
-# then the pinned lock file (torch==X is satisfied by X+cpu).
+# CPU-only torch first (the default Linux wheel pulls multi-GB CUDA libraries): the
+# explicit +cpu version only exists on the PyTorch index; its dependencies come from
+# PyPI (--extra-index-url). Then the pinned lock file (torch==X is satisfied by X+cpu).
 COPY requirements.lock .
 RUN TORCH_VERSION=$(grep -E '^torch==' requirements.lock | cut -d= -f3) \
- && pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu \
+ && pip install "torch==${TORCH_VERSION}+cpu" --extra-index-url https://download.pytorch.org/whl/cpu \
  && pip install -r requirements.lock
 
 # Bake the embedding model into the image (no download at startup; works offline)

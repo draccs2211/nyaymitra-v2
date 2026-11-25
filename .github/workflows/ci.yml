@@ -16,7 +16,7 @@ jobs:
       HF_HOME: ${{ github.workspace }}/.hf-cache
       APP_ENV: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-python@v5
         with:
@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies (CPU torch)
         run: |
           TORCH_VERSION=$(grep -E '^torch==' requirements.lock | cut -d= -f3)
-          pip install "torch==${TORCH_VERSION}" --index-url https://download.pytorch.org/whl/cpu
+          pip install "torch==${TORCH_VERSION}+cpu" --extra-index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.lock
 
       - name: Load legal corpus
@@ -46,6 +46,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t nyaymitra-api:ci .
