@@ -48,11 +48,10 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 1. Legal content needs lawyer review: IPC 376 -> "BNS 63" (punishment is likely BNS 64) in `legal_reference_mcp.py`, `guardian.py`, `data/legal_corpus/curated_summaries.jsonl`; UP Rent Act "30-day deposit return" claim; whole IPC->BNS table
 2. Approval checkpointer is in-memory (`get_checkpointer()` in `pipeline.py`): pending reviews are marked `expired` (410) after a restart. Local Postgres `DATABASE_URL` doesn't connect; fix it, then use a Postgres saver (needs `langgraph-checkpoint-postgres`)
 3. Referral always returns Lucknow DLSA; DLSA + templates MCP servers not wired
-4. `jurisdiction` is in request/state/cache key but retrieval doesn't filter by it
-5. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
-6. Cases are visible only to their creator, not firm colleagues (product decision)
-7. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
-8. Indian Kanoon API key not purchased (research reports `not_configured`)
+4. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
+5. Cases are visible only to their creator, not firm colleagues (product decision)
+6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
+7. Indian Kanoon API key not purchased (research reports `not_configured`)
 
 ## Later
 Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.

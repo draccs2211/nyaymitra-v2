@@ -5,6 +5,7 @@ Each agent builds one of the *Output models and returns `to_state(model)`,
 a partial dict merged into NyayMitraState by LangGraph. Fields left as None
 are dropped, so an agent only writes the state keys it actually sets.
 """
+import re
 from typing import Any, Dict, List, Literal, Optional, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -85,6 +86,7 @@ class ClassificationLLMOutput(BaseModel):
     requested_actions: List[RequestedAction] = Field(default_factory=lambda: ["research"])
     language: Language = "en"
     search_query_en: str = ""
+    jurisdiction: str = "IN"      # IN-XX if the query names an Indian state/UT (or a city in it)
     urgency: Urgency = "low"
     key_issues: List[str] = Field(default_factory=list)
     suggested_acts: List[str] = Field(default_factory=list)
@@ -94,6 +96,12 @@ class ClassificationLLMOutput(BaseModel):
     @classmethod
     def _domain(cls, v):
         return _coerce_choice(v, tuple(LEGAL_DOMAINS), "general")
+
+    @field_validator("jurisdiction", mode="before")
+    @classmethod
+    def _jurisdiction(cls, v):
+        v = str(v or "").strip().upper()
+        return v if re.match(r"^IN(-[A-Z]{2})?$", v) else "IN"
 
     @field_validator("search_query_en", mode="before")
     @classmethod
@@ -147,6 +155,7 @@ class OrchestratorOutput(_Base):
     requested_actions: List[RequestedAction] = Field(min_length=1)
     language: Language
     search_query_en: str = ""
+    jurisdiction: Optional[str] = None
     classification: ClassificationMeta
 
 

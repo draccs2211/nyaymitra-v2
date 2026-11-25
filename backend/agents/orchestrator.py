@@ -26,6 +26,7 @@ Analyze the given legal query and return a JSON response with the following fiel
     "requested_actions": ["<every action the query asks for — one or more of: research, drafting, referral>"],
     "language": "<one of: en, hi, hinglish>",
     "search_query_en": "<the legal issue restated as a short English search query>",
+    "jurisdiction": "<IN-XX ISO 3166-2 code of the Indian state/UT the matter arises in, or IN>",
     "urgency": "<one of: critical, high, medium, low>",
     "key_issues": ["<issue 1>", "<issue 2>"],
     "suggested_acts": ["<Act 1>", "<Act 2>"],
@@ -50,6 +51,11 @@ Requested actions (a query can ask for several — include ALL that apply):
 Example: "Draft a legal notice to my landlord and tell me where to get free legal aid" -> ["research", "drafting", "referral"]
 Example: "Only give me the DLSA contact for Lucknow" -> ["referral"]
 If unsure, include "research".
+
+Jurisdiction:
+- If the query names an Indian state/UT or a city in one, return its ISO 3166-2 code
+  (e.g. Lucknow -> IN-UP, Mumbai -> IN-MH, Delhi -> IN-DL, Bengaluru -> IN-KA). Otherwise "IN".
+- Do not guess a state that is not mentioned.
 
 Search query (search_query_en):
 - Restate the user's legal issue as a concise English search query using standard Indian legal terms.
@@ -107,6 +113,9 @@ Classify this query and return JSON."""
             requested_actions=result.requested_actions,
             language=result.language,
             search_query_en=result.search_query_en,
+            # an explicit jurisdiction on the request wins over the detected one
+            jurisdiction=(state.get("jurisdiction") if state.get("jurisdiction", "IN") != "IN"
+                          else result.jurisdiction),
             tokens_used=usage.total,
             classification=ClassificationMeta(
                 urgency=result.urgency,

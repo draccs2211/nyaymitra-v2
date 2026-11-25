@@ -97,7 +97,9 @@ def _build_prompt(state: NyayMitraState) -> str:
     if research_results:
         context_parts.append("\nRelevant Legal Information:")
         for result in research_results[:3]:
-            context_parts.append(f"- {result.get('content', '')[:400]}")
+            doc_jur = (result.get("metadata") or {}).get("jurisdiction", "IN")
+            label = f"[applies only in {doc_jur}] " if doc_jur != "IN" else ""
+            context_parts.append(f"- {label}{result.get('content', '')[:400]}")
     mcp_sections = [s for s in state.get("ipc_sections", []) if s.get("source") == "mcp"]
     if mcp_sections:
         context_parts.append("\nIPC -> BNS references (quick reference, verify official text):")
@@ -115,8 +117,11 @@ def _build_prompt(state: NyayMitraState) -> str:
             f"Possibly relevant Acts (unverified, from classifier): {'; '.join(suggested_acts) or 'none'}\n"
         )
 
+    jurisdiction = state.get("jurisdiction") or "IN"
+    jurisdiction_line = (f"Jurisdiction: {jurisdiction}\n" if jurisdiction != "IN" else
+                         "Jurisdiction: not specified (treat state-specific sources as possibly inapplicable)\n")
     return (
-        f"Legal Domain: {domain}\nUser Query: {query}\nLanguage: {language}\n{issues_block}\n"
+        f"Legal Domain: {domain}\nUser Query: {query}\nLanguage: {language}\n{jurisdiction_line}{issues_block}\n"
         f"LEGAL CONTEXT:\n{context}"
     )
 

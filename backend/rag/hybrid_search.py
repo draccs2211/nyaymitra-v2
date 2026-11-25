@@ -36,6 +36,18 @@ def tokenize(text: str) -> List[str]:
     return _TOKEN_RE.findall((text or "").lower())
 
 
+def filter_by_jurisdiction(docs: List[Dict], jurisdiction: str) -> List[Dict]:
+    """
+    State known (IN-XX): keep central (IN) docs and that state's docs only —
+    never present another state's law. State unknown (IN): keep everything;
+    state-specific docs are labelled downstream instead.
+    """
+    if not jurisdiction or jurisdiction == "IN":
+        return docs
+    allowed = {"IN", jurisdiction}
+    return [d for d in docs if (d.get("metadata") or {}).get("jurisdiction", "IN") in allowed]
+
+
 class HybridRAG:
     def __init__(self):
         # Embedding model (~0.5 GB) loads lazily on first use; the API warms it
@@ -332,6 +344,7 @@ class HybridRAG:
         legal_domain: Optional[str] = None,
         top_k: int = TOP_K_RESULTS,
         extra_queries: Optional[List[str]] = None,
+        jurisdiction: str = "IN",
     ) -> List[Dict]:
         """
         Full hybrid search pipeline:
@@ -342,6 +355,7 @@ class HybridRAG:
         4. Domain filtering (falls back to unfiltered if it removes everything)
         """
         fused = self.retrieve([query] + list(extra_queries or []), top_k)
+        fused = filter_by_jurisdiction(fused, jurisdiction)
 
         reranked = self.rerank(query, fused, top_k=RERANK_TOP_K)
 

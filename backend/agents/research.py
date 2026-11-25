@@ -124,7 +124,8 @@ def research_agent(state: NyayMitraState) -> dict:
     # Original query + orchestrator's English rewrite, fused (helps Hindi/Hinglish
     # against the English corpus; see backend/evaluation/retrieval_eval.py)
     rewrite = state.get("search_query_en", "")
-    rag_results = hybrid_rag.search(query, domain, extra_queries=[rewrite] if rewrite else None)
+    rag_results = hybrid_rag.search(query, domain, extra_queries=[rewrite] if rewrite else None,
+                                    jurisdiction=state.get("jurisdiction") or "IN")
     sections = ipc_sections_to_lookup(query, rag_results)
 
     (kanoon_cases, kanoon_status), *ipc_lookups = run_sync(_gather_mcp(query, sections))
