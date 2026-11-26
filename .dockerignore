@@ -16,3 +16,7 @@ frontend/
 tests/
 test.py
 backend/rag/test.py
+# unreviewed OCR drafts / raw sources never ship
+data/legal_corpus/_pending/
+data/legal_corpus/raw/
+scripts/

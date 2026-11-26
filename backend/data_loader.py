@@ -28,7 +28,8 @@ from pydantic import ValidationError
 from backend.rag.metadata import DocMetadata
 
 CORPUS_DIR = Path(__file__).resolve().parents[1] / "data" / "legal_corpus"
-MAX_CHUNK_CHARS = 1500          # longer sections are split into overlapping parts
+# ~ what the embedding model reads (128 tokens); longer sections are split with overlap
+MAX_CHUNK_CHARS = 700
 
 _SECTION_RE = re.compile(r"^##\s+(?:Section|Sec\.?|धारा)\s+(\d+[A-Z]?)\b\s*[—:-]?\s*(.*)$", re.IGNORECASE)
 
@@ -71,18 +72,51 @@ def read_jsonl(path: Path) -> List[dict]:
     return docs
 
 
+_CLAUSE_SPLIT = re.compile(r"(?<=[;:.])\s+(?=\(|[A-Z0-9“\"])")
+
+
+def _units(text: str, limit: int) -> List[str]:
+    """Break text into pieces <= limit: blank-line paragraphs, then lines, then
+    clause/sentence boundaries, then (last resort) word boundaries."""
+    out: List[str] = []
+    for para in (p.strip() for p in re.split(r"\n\s*\n", text)):
+        if not para:
+            continue
+        if len(para) <= limit:
+            out.append(para)
+            continue
+        for line in (l.strip() for l in para.split("\n")):
+            if not line:
+                continue
+            if len(line) <= limit:
+                out.append(line)
+                continue
+            for clause in (c.strip() for c in _CLAUSE_SPLIT.split(line)):
+                while len(clause) > limit:                      # no boundary: cut at a space
+                    cut = clause.rfind(" ", 0, limit)
+                    cut = cut if cut > limit // 2 else limit
+                    out.append(clause[:cut].strip())
+                    clause = clause[cut:].strip()
+                if clause:
+                    out.append(clause)
+    return out
+
+
 def _split_long(text: str, limit: int = MAX_CHUNK_CHARS) -> List[str]:
-    """Split on paragraph boundaries into chunks <= limit, overlapping by one paragraph."""
-    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    """Pack units into chunks <= limit, carrying the previous unit as overlap when it fits."""
+    units = _units(text, limit)
+    if not units:
+        return [text]
     chunks, current = [], []
-    for p in paras:
-        if current and len("\n\n".join(current + [p])) > limit:
-            chunks.append("\n\n".join(current))
-            current = [current[-1]]          # overlap: carry the last paragraph
-        current.append(p)
+    for u in units:
+        if current and len("\n".join(current + [u])) > limit:
+            chunks.append("\n".join(current))
+            last = current[-1]
+            current = [last] if len(last) + 1 + len(u) <= limit else []   # overlap if it fits
+        current.append(u)
     if current:
-        chunks.append("\n\n".join(current))
-    return chunks or [text]
+        chunks.append("\n".join(current))
+    return chunks
 
 
 def read_act_markdown(path: Path) -> List[dict]:

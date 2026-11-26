@@ -61,8 +61,19 @@ Text of 318A.
         # consecutive parts share a paragraph (overlap) and every clause is covered
         body = "\n".join(d["content"] for d in docs)
         assert all(f"Clause {i}." in body for i in range(12))
-        last_para_of_first = docs[0]["content"].split("\n\n")[-1]
-        assert last_para_of_first in docs[1]["content"]
+        last_unit_of_first = docs[0]["content"].split("\n")[-1]
+        assert last_unit_of_first in docs[1]["content"]
+
+    def test_single_newline_clauses_and_long_lines_are_split(self, tmp_path):
+        """Converted Acts put each clause on its own line (no blank lines); a clause may be huge."""
+        clauses = "\n".join(f"({i}) " + "term " * 40 + ";" for i in range(30))
+        giant = "Definitions: " + " ".join(f"({i}) item {i} means thing {i};" for i in range(200))
+        write(tmp_path, "act.md", ACT_HEADER + "## Section 2 — Defs\n" + clauses + "\n" + giant)
+        docs = build_documents(tmp_path)
+        assert len(docs) > 10
+        assert all(len(d["content"]) <= MAX_CHUNK_CHARS + 120 for d in docs)
+        body = " ".join(d["content"] for d in docs)
+        assert "(29) term" in body and "item 199 means thing 199" in body
 
     @pytest.mark.parametrize("text,error", [
         ("## Section 1 — X\ntext", "header block"),

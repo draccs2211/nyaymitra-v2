@@ -1,94 +1,253 @@
 {
-  "description": "Retrieval eval: same intent in en / hi (Devanagari) / hinglish (Roman). A hit is any top-k doc matching ANY relevance rule. Rules: {field: value} where 'topic'/'section'/'doc_type' must equal and 'act' must contain value.",
-  "items": [
-    {"id": "security_deposit", "relevant": [{"topic": "security_deposit"}, {"act": "Uttar Pradesh Urban Buildings"}],
-     "en": "Landlord is not returning my security deposit after I vacated the flat",
-     "hi": "मकान मालिक घर खाली करने के बाद सिक्योरिटी डिपॉजिट वापस नहीं कर रहा है",
-     "hinglish": "makan malik security deposit wapas nahi kar raha ghar khali karne ke baad"},
-
-    {"id": "eviction", "relevant": [{"topic": "eviction"}],
-     "en": "Can my landlord evict me without a court order?",
-     "hi": "क्या मकान मालिक बिना कोर्ट के आदेश के किरायेदार को घर से निकाल सकता है?",
-     "hinglish": "kya landlord bina court order ke kirayedar ko ghar se nikal sakta hai"},
-
-    {"id": "defective_product", "relevant": [{"topic": "defective_product"}, {"topic": "consumer_complaint"}, {"act": "Consumer Protection Act"}],
-     "en": "Company sold me a defective washing machine and refuses a refund",
-     "hi": "कंपनी ने खराब वॉशिंग मशीन बेची और पैसे वापस नहीं कर रही",
-     "hinglish": "company ne kharab washing machine bechi aur refund nahi de rahi"},
-
-    {"id": "rti_filing", "relevant": [{"act": "Right to Information", "doc_type": "act"}],
-     "en": "How do I file an RTI application and what is the fee?",
-     "hi": "सूचना का अधिकार के तहत आवेदन कैसे करें और फीस कितनी है?",
-     "hinglish": "RTI application kaise file karein aur fees kitni hai"},
-
-    {"id": "rti_appeal", "relevant": [{"topic": "rti_appeal"}],
-     "en": "The PIO did not reply to my RTI within 30 days, how do I appeal?",
-     "hi": "जन सूचना अधिकारी ने 30 दिन में आरटीआई का जवाब नहीं दिया, अपील कैसे करें?",
-     "hinglish": "PIO ne 30 din mein RTI ka jawab nahi diya, appeal kaise karein"},
-
-    {"id": "unpaid_salary", "relevant": [{"act": "Payment of Wages"}],
-     "en": "My employer has not paid my salary for two months",
-     "hi": "मालिक ने दो महीने से वेतन नहीं दिया है",
-     "hinglish": "boss ne do mahine se salary nahi di hai"},
-
-    {"id": "wrongful_termination", "relevant": [{"topic": "wrongful_termination"}],
-     "en": "I was fired from my job without any notice",
-     "hi": "मुझे बिना नोटिस के नौकरी से निकाल दिया गया",
-     "hinglish": "mujhe bina notice ke naukri se nikal diya"},
-
-    {"id": "workplace_harassment", "relevant": [{"topic": "workplace_harassment"}],
-     "en": "My manager is sexually harassing me at the office",
-     "hi": "दफ्तर में मेरा मैनेजर मेरा यौन उत्पीड़न कर रहा है",
-     "hinglish": "office mein manager mujhe sexually harass kar raha hai"},
-
-    {"id": "fir_refused", "relevant": [{"topic": "fir"}],
-     "en": "The police station is refusing to register my FIR",
-     "hi": "थाने में पुलिस मेरी एफआईआर दर्ज नहीं कर रही",
-     "hinglish": "thane mein police meri FIR darj nahi kar rahi"},
-
-    {"id": "anticipatory_bail", "relevant": [{"topic": "bail"}],
-     "en": "How to get anticipatory bail before arrest?",
-     "hi": "गिरफ्तारी से पहले अग्रिम जमानत कैसे मिलती है?",
-     "hinglish": "giraftari se pehle anticipatory bail kaise milti hai"},
-
-    {"id": "divorce", "relevant": [{"topic": "divorce"}],
-     "en": "What are the grounds for divorce under Hindu law?",
-     "hi": "हिंदू विवाह अधिनियम में तलाक के आधार क्या हैं?",
-     "hinglish": "hindu marriage act mein talaq ke grounds kya hain"},
-
-    {"id": "child_custody", "relevant": [{"topic": "custody"}],
-     "en": "Who gets custody of a young child after the parents separate?",
-     "hi": "माता-पिता के अलग होने के बाद छोटे बच्चे की कस्टडी किसे मिलती है?",
-     "hinglish": "alag hone ke baad chhote bachche ki custody kise milti hai"},
-
-    {"id": "maintenance", "relevant": [{"topic": "maintenance"}],
-     "en": "The wife wants monthly maintenance from her husband",
-     "hi": "पत्नी पति से हर महीने भरण-पोषण चाहती है",
-     "hinglish": "patni pati se har mahine kharcha chahti hai"},
-
-    {"id": "domestic_violence", "relevant": [{"act": "Domestic Violence"}],
-     "en": "Husband beats his wife at home, what protection is available?",
-     "hi": "पति घर पर पत्नी को मारता है, क्या सुरक्षा मिल सकती है?",
-     "hinglish": "pati ghar pe patni ko maarta hai, kya protection mil sakta hai"},
-
-    {"id": "dowry_cruelty", "relevant": [{"section": "498A"}],
-     "en": "In-laws are harassing the woman for dowry",
-     "hi": "ससुराल वाले दहेज के लिए महिला को परेशान कर रहे हैं",
-     "hinglish": "sasural wale dahej ke liye bahu ko pareshan kar rahe hain"},
-
-    {"id": "cheating", "relevant": [{"section": "420"}],
-     "en": "Someone cheated me and took my money by fraud",
-     "hi": "किसी ने धोखाधड़ी करके मुझसे पैसे ले लिए",
-     "hinglish": "kisi ne dhokha dekar mujhse paise le liye"},
-
-    {"id": "free_legal_aid", "relevant": [{"topic": "legal_aid"}],
-     "en": "I cannot afford a lawyer, how can I get free legal aid?",
-     "hi": "मेरे पास वकील के पैसे नहीं हैं, मुफ्त कानूनी सहायता कैसे मिलेगी?",
-     "hinglish": "vakil ke paise nahi hain, free legal aid kaise milegi"},
-
-    {"id": "lok_adalat", "relevant": [{"topic": "lok_adalat"}],
-     "en": "Can my dispute be settled in Lok Adalat without court fees?",
-     "hi": "क्या मेरा विवाद लोक अदालत में बिना कोर्ट फीस के सुलझ सकता है?",
-     "hinglish": "kya mera case lok adalat mein bina court fees ke settle ho sakta hai"}
-  ]
+ "description": "Retrieval eval: same intent in en / hi (Devanagari) / hinglish (Roman). A hit is any top-k doc matching ANY relevance rule. Rules: {field: value} where 'topic'/'section'/'doc_type' must equal and 'act' must contain value. Statutory rules (act+section) accept the official Act text in data/legal_corpus; section titles verified against the corpus files.",
+ "items": [
+  {
+   "id": "security_deposit",
+   "relevant": [
+    {
+     "topic": "security_deposit"
+    },
+    {
+     "act": "Uttar Pradesh Urban Buildings"
+    }
+   ],
+   "en": "Landlord is not returning my security deposit after I vacated the flat",
+   "hi": "मकान मालिक घर खाली करने के बाद सिक्योरिटी डिपॉजिट वापस नहीं कर रहा है",
+   "hinglish": "makan malik security deposit wapas nahi kar raha ghar khali karne ke baad"
+  },
+  {
+   "id": "eviction",
+   "relevant": [
+    {
+     "topic": "eviction"
+    }
+   ],
+   "en": "Can my landlord evict me without a court order?",
+   "hi": "क्या मकान मालिक बिना कोर्ट के आदेश के किरायेदार को घर से निकाल सकता है?",
+   "hinglish": "kya landlord bina court order ke kirayedar ko ghar se nikal sakta hai"
+  },
+  {
+   "id": "defective_product",
+   "relevant": [
+    {
+     "topic": "defective_product"
+    },
+    {
+     "topic": "consumer_complaint"
+    },
+    {
+     "act": "Consumer Protection Act"
+    }
+   ],
+   "en": "Company sold me a defective washing machine and refuses a refund",
+   "hi": "कंपनी ने खराब वॉशिंग मशीन बेची और पैसे वापस नहीं कर रही",
+   "hinglish": "company ne kharab washing machine bechi aur refund nahi de rahi"
+  },
+  {
+   "id": "rti_filing",
+   "relevant": [
+    {
+     "act": "Right to Information",
+     "doc_type": "act"
+    },
+    {
+     "act": "Right to Information",
+     "section": "6"
+    }
+   ],
+   "en": "How do I file an RTI application and what is the fee?",
+   "hi": "सूचना का अधिकार के तहत आवेदन कैसे करें और फीस कितनी है?",
+   "hinglish": "RTI application kaise file karein aur fees kitni hai"
+  },
+  {
+   "id": "rti_appeal",
+   "relevant": [
+    {
+     "topic": "rti_appeal"
+    },
+    {
+     "act": "Right to Information",
+     "section": "19"
+    }
+   ],
+   "en": "The PIO did not reply to my RTI within 30 days, how do I appeal?",
+   "hi": "जन सूचना अधिकारी ने 30 दिन में आरटीआई का जवाब नहीं दिया, अपील कैसे करें?",
+   "hinglish": "PIO ne 30 din mein RTI ka jawab nahi diya, appeal kaise karein"
+  },
+  {
+   "id": "unpaid_salary",
+   "relevant": [
+    {
+     "act": "Payment of Wages"
+    },
+    {
+     "act": "Code on Wages",
+     "section": "17"
+    }
+   ],
+   "en": "My employer has not paid my salary for two months",
+   "hi": "मालिक ने दो महीने से वेतन नहीं दिया है",
+   "hinglish": "boss ne do mahine se salary nahi di hai"
+  },
+  {
+   "id": "wrongful_termination",
+   "relevant": [
+    {
+     "topic": "wrongful_termination"
+    }
+   ],
+   "en": "I was fired from my job without any notice",
+   "hi": "मुझे बिना नोटिस के नौकरी से निकाल दिया गया",
+   "hinglish": "mujhe bina notice ke naukri se nikal diya"
+  },
+  {
+   "id": "workplace_harassment",
+   "relevant": [
+    {
+     "topic": "workplace_harassment"
+    }
+   ],
+   "en": "My manager is sexually harassing me at the office",
+   "hi": "दफ्तर में मेरा मैनेजर मेरा यौन उत्पीड़न कर रहा है",
+   "hinglish": "office mein manager mujhe sexually harass kar raha hai"
+  },
+  {
+   "id": "fir_refused",
+   "relevant": [
+    {
+     "topic": "fir"
+    },
+    {
+     "act": "Nagarik Suraksha Sanhita",
+     "section": "173"
+    }
+   ],
+   "en": "The police station is refusing to register my FIR",
+   "hi": "थाने में पुलिस मेरी एफआईआर दर्ज नहीं कर रही",
+   "hinglish": "thane mein police meri FIR darj nahi kar rahi"
+  },
+  {
+   "id": "anticipatory_bail",
+   "relevant": [
+    {
+     "topic": "bail"
+    },
+    {
+     "act": "Nagarik Suraksha Sanhita",
+     "section": "482"
+    }
+   ],
+   "en": "How to get anticipatory bail before arrest?",
+   "hi": "गिरफ्तारी से पहले अग्रिम जमानत कैसे मिलती है?",
+   "hinglish": "giraftari se pehle anticipatory bail kaise milti hai"
+  },
+  {
+   "id": "divorce",
+   "relevant": [
+    {
+     "topic": "divorce"
+    },
+    {
+     "act": "Hindu Marriage",
+     "section": "13"
+    }
+   ],
+   "en": "What are the grounds for divorce under Hindu law?",
+   "hi": "हिंदू विवाह अधिनियम में तलाक के आधार क्या हैं?",
+   "hinglish": "hindu marriage act mein talaq ke grounds kya hain"
+  },
+  {
+   "id": "child_custody",
+   "relevant": [
+    {
+     "topic": "custody"
+    }
+   ],
+   "en": "Who gets custody of a young child after the parents separate?",
+   "hi": "माता-पिता के अलग होने के बाद छोटे बच्चे की कस्टडी किसे मिलती है?",
+   "hinglish": "alag hone ke baad chhote bachche ki custody kise milti hai"
+  },
+  {
+   "id": "maintenance",
+   "relevant": [
+    {
+     "topic": "maintenance"
+    },
+    {
+     "act": "Nagarik Suraksha Sanhita",
+     "section": "144"
+    }
+   ],
+   "en": "The wife wants monthly maintenance from her husband",
+   "hi": "पत्नी पति से हर महीने भरण-पोषण चाहती है",
+   "hinglish": "patni pati se har mahine kharcha chahti hai"
+  },
+  {
+   "id": "domestic_violence",
+   "relevant": [
+    {
+     "act": "Domestic Violence"
+    }
+   ],
+   "en": "Husband beats his wife at home, what protection is available?",
+   "hi": "पति घर पर पत्नी को मारता है, क्या सुरक्षा मिल सकती है?",
+   "hinglish": "pati ghar pe patni ko maarta hai, kya protection mil sakta hai"
+  },
+  {
+   "id": "dowry_cruelty",
+   "relevant": [
+    {
+     "section": "498A"
+    },
+    {
+     "act": "Nyaya Sanhita",
+     "section": "85"
+    },
+    {
+     "act": "Nyaya Sanhita",
+     "section": "86"
+    }
+   ],
+   "en": "In-laws are harassing the woman for dowry",
+   "hi": "ससुराल वाले दहेज के लिए महिला को परेशान कर रहे हैं",
+   "hinglish": "sasural wale dahej ke liye bahu ko pareshan kar rahe hain"
+  },
+  {
+   "id": "cheating",
+   "relevant": [
+    {
+     "section": "420"
+    },
+    {
+     "act": "Nyaya Sanhita",
+     "section": "318"
+    }
+   ],
+   "en": "Someone cheated me and took my money by fraud",
+   "hi": "किसी ने धोखाधड़ी करके मुझसे पैसे ले लिए",
+   "hinglish": "kisi ne dhokha dekar mujhse paise le liye"
+  },
+  {
+   "id": "free_legal_aid",
+   "relevant": [
+    {
+     "topic": "legal_aid"
+    }
+   ],
+   "en": "I cannot afford a lawyer, how can I get free legal aid?",
+   "hi": "मेरे पास वकील के पैसे नहीं हैं, मुफ्त कानूनी सहायता कैसे मिलेगी?",
+   "hinglish": "vakil ke paise nahi hain, free legal aid kaise milegi"
+  },
+  {
+   "id": "lok_adalat",
+   "relevant": [
+    {
+     "topic": "lok_adalat"
+    }
+   ],
+   "en": "Can my dispute be settled in Lok Adalat without court fees?",
+   "hi": "क्या मेरा विवाद लोक अदालत में बिना कोर्ट फीस के सुलझ सकता है?",
+   "hinglish": "kya mera case lok adalat mein bina court fees ke settle ho sakta hai"
+  }
+ ]
 }
