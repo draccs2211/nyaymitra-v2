@@ -1,38 +1,11 @@
 from fastmcp import FastMCP
 import json
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import List, Optional
 
 mcp = FastMCP("DLSA MCP Server")
-
-DLSA_DATA = {
-    "lucknow": {
-        "name": "DLSA Lucknow",
-        "full_name": "District Legal Services Authority, Lucknow",
-        "address": "District Court Complex, Lucknow - 226001",
-        "phone": "0522-2611818",
-        "email": "dlsalucknow@gmail.com",
-        "timing": "10:00 AM - 5:00 PM (Mon-Sat)",
-        "services": ["Free legal aid", "Lok Adalat", "Mediation", "Legal awareness"],
-        "eligibility": "Income below ₹3 lakh/year, SC/ST, Women, Children, Disabled persons"
-    },
-    "allahabad": {
-        "name": "DLSA Allahabad/Prayagraj",
-        "full_name": "District Legal Services Authority, Prayagraj",
-        "address": "Civil Court Compound, Prayagraj - 211001",
-        "phone": "0532-2420711",
-        "timing": "10:00 AM - 5:00 PM (Mon-Sat)",
-        "services": ["Free legal aid", "Lok Adalat", "Mediation"],
-        "eligibility": "Income below ₹3 lakh/year, SC/ST, Women, Children, Disabled persons"
-    },
-    "agra": {
-        "name": "DLSA Agra",
-        "full_name": "District Legal Services Authority, Agra",
-        "address": "District Court, Agra",
-        "phone": "0562-2521234",
-        "timing": "10:00 AM - 5:00 PM (Mon-Sat)",
-        "services": ["Free legal aid", "Lok Adalat"],
-        "eligibility": "Income below ₹3 lakh/year, SC/ST, Women, Children, Disabled persons"
-    }
-}
 
 NALSA_INFO = {
     "name": "National Legal Services Authority (NALSA)",
@@ -58,39 +31,89 @@ NALSA_INFO = {
 }
 
 
+# ─── Directory data (data/referral/*.json, collected from official NALSA/SLSA pages) ───
+_ROOT = Path(__file__).resolve().parents[2]
+DLSA_DIRECTORIES = {"Uttar Pradesh": _ROOT / "data" / "referral" / "up_dlsa_directory.json"}
+HELPLINES_PATH = _ROOT / "data" / "referral" / "helplines.json"
+STATE_DIRECTORY_URLS = {"Uttar Pradesh": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/"}
+STATE_CODES = {"IN-UP": "Uttar Pradesh"}
+
+# Former / common names -> official district name (exact lookup, not keyword matching)
+DISTRICT_ALIASES = {
+    "allahabad": "Prayagraj", "faizabad": "Ayodhya", "noida": "Gautam Buddha Nagar",
+    "greater noida": "Gautam Buddha Nagar", "kanpur": "Kanpur Nagar", "sant ravidas nagar": "Bhadohi",
+    "lakhimpur": "Lakhimpur Kheri", "kheri": "Lakhimpur Kheri", "rae bareli": "Raebareli",
+}
+
+
+def _norm(name: str) -> str:
+    return re.sub(r"[^a-z]", "", (name or "").lower())
+
+
+@lru_cache(maxsize=None)
+def _directory(state: str) -> dict:
+    path = DLSA_DIRECTORIES.get(state)
+    if not path or not path.exists():
+        return {}
+    rows = json.loads(path.read_text(encoding="utf-8")).get("dlsa", [])
+    return {_norm(r["district"]): r for r in rows}
+
+
+def lookup_dlsa(district: str, state: str = "Uttar Pradesh") -> Optional[dict]:
+    if not district:
+        return None
+    official = DISTRICT_ALIASES.get(district.strip().lower(), district)
+    return _directory(state).get(_norm(official))
+
+
+@lru_cache(maxsize=1)
+def load_helplines() -> List[dict]:
+    if not HELPLINES_PATH.exists():
+        return []
+    return json.loads(HELPLINES_PATH.read_text(encoding="utf-8")).get("helplines", [])
+
+
 @mcp.tool()
-async def find_dlsa(district: str = "lucknow") -> dict:
+async def find_dlsa(district: str = "", jurisdiction: str = "IN") -> dict:
     """
-    Find DLSA office for a district.
+    Find the District Legal Services Authority for a district.
 
     Args:
-        district: District name (lucknow, allahabad, agra, etc.)
+        district: Official district name (e.g. "Prayagraj"); common old names are accepted
+        jurisdiction: ISO code of the state, e.g. "IN-UP" ("IN" if unknown)
     """
-    district_lower = district.lower().strip()
-
-    # Find matching DLSA
-    dlsa = None
-    for key, data in DLSA_DATA.items():
-        if key in district_lower or district_lower in key:
-            dlsa = data
-            break
-
-    if dlsa:
+    state = STATE_CODES.get(jurisdiction)
+    row = lookup_dlsa(district, state) if state else None
+    if row:
         return {
             "status": "found",
-            "district": district,
-            "dlsa": dlsa,
+            "dlsa": {
+                "name": f"District Legal Services Authority, {row['district']}",
+                "district": row["district"],
+                "state": row.get("state") or state,
+                "secretary": row.get("secretary") or "",
+                "phone": row.get("phone") or "",
+                "as_of": row.get("collected") or "",
+                "source_url": row.get("source_url") or "",
+                "verified_by_human": bool(row.get("verified_by_human")),
+            },
             "national_helpline": "15100",
-            "note": "Free legal aid available for eligible persons"
         }
-    else:
-        return {
-            "status": "general",
-            "message": f"Specific DLSA data not available for {district}",
-            "national_helpline": "15100",
-            "nalsa": NALSA_INFO,
-            "instruction": "Call 15100 to find nearest DLSA office"
-        }
+    return {
+        "status": "state_directory" if state else "national",
+        "district": district,
+        "state": state or "",
+        "directory_url": STATE_DIRECTORY_URLS.get(state, "https://nalsa.gov.in"),
+        "national_helpline": "15100",
+        "message": ("District not found in the directory; use the state DLSA directory or call 15100."
+                    if state else "Call the NALSA helpline 15100 to reach the nearest DLSA."),
+    }
+
+
+@mcp.tool()
+async def list_helplines() -> dict:
+    """Helpline numbers from data/referral/helplines.json (with source and verification flag)."""
+    return {"status": "success", "helplines": load_helplines()}
 
 
 @mcp.tool()

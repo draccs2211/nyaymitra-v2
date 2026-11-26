@@ -404,8 +404,56 @@ class TestReferralOutput:
         from backend.agents.referral import referral_agent
         out = referral_agent(make_state(final_response="Prior analysis"))
         assert out["final_response"].startswith("Prior analysis")
-        assert out["dlsa_offices"][0]["helpline"] == "15100"
+        assert "15100" in out["final_response"] and out["dlsa_offices"] == []   # no district known
         schemas.ReferralOutput(**out)
+
+    def test_district_from_directory(self):
+        from backend.agents.referral import referral_agent
+        out = referral_agent(make_state(district="Allahabad", jurisdiction="IN-UP"))
+        office, = out["dlsa_offices"]
+        assert office["district"] == "Prayagraj" and office["state"] == "Uttar Pradesh"
+        assert office["source_url"].startswith("https://") and office["as_of"]
+        assert "Prayagraj" in out["final_response"]
+        assert "0522-2611818" not in out["final_response"]          # old hard-coded Lucknow number gone
+
+    def test_up_without_district_points_to_state_directory(self):
+        from backend.agents.referral import referral_agent
+        out = referral_agent(make_state(jurisdiction="IN-UP"))
+        assert "uttarpradesh.nalsa.gov.in/dlsa-directory" in out["final_response"]
+
+    def test_other_state_gets_national_helpline(self):
+        from backend.agents.referral import referral_agent
+        out = referral_agent(make_state(district="Pune", jurisdiction="IN-MH"))
+        assert out["dlsa_offices"] == [] and "15100" in out["final_response"]
+
+    @pytest.mark.parametrize("domain,number", [("consumer", "1915"), ("family", "181")])
+    def test_domain_helpline_from_data(self, domain, number):
+        from backend.agents.referral import referral_agent
+        assert number in referral_agent(make_state(legal_domain=domain))["final_response"]
+
+    def test_hindi_labels(self):
+        from backend.agents.referral import referral_agent
+        out = referral_agent(make_state(language="hi", district="Lucknow", jurisdiction="IN-UP"))
+        assert "जिला विधिक सेवा प्राधिकरण" in out["final_response"]
+
+    def test_mcp_failure_falls_back(self, monkeypatch):
+        from backend.agents import referral
+
+        async def down(*a, **kw):
+            raise referral.MCPCallError("down")
+        monkeypatch.setattr(referral, "call_tool", down)
+        out = referral.referral_agent(make_state(district="Lucknow", jurisdiction="IN-UP"))
+        assert "15100" in out["final_response"] and out["dlsa_offices"] == []
+
+
+class TestDistrictDetection:
+    @pytest.mark.parametrize("raw,expected", [("Prayagraj", "Prayagraj"), ("  Gautam  Buddha Nagar ", "Gautam Buddha Nagar"),
+                                              ("null", ""), (None, "")])
+    def test_district_normalised(self, monkeypatch, raw, expected):
+        from backend.agents import orchestrator
+        monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps(
+            {"legal_domain": "property", "jurisdiction": "IN-UP", "district": raw})))
+        assert orchestrator.orchestrator_agent(make_state(user_query="q"))["district"] == expected
 
 
 class TestVerificationOutput:
@@ -508,4 +556,5 @@ class TestPipelineWithSchemas:
         if ran_research:
             assert "unreturned deposit" in prompts[0]           # issues fed to analysis
         assert bool(result["draft_document"]) is ("drafting" in actions)
-        assert bool(result["dlsa_offices"]) is ("referral" in actions)
+        # referral ran <=> its legal-aid block is in the response (no district given -> national helpline)
+        assert ("NALSA legal aid helpline: 15100" in result["final_response"]) is ("referral" in actions)

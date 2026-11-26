@@ -27,6 +27,7 @@ Analyze the given legal query and return a JSON response with the following fiel
     "language": "<one of: en, hi, hinglish>",
     "search_query_en": "<the legal issue restated as a short English search query>",
     "jurisdiction": "<IN-XX ISO 3166-2 code of the Indian state/UT the matter arises in, or IN>",
+    "district": "<official district name if the query names a district or city, else empty>",
     "urgency": "<one of: critical, high, medium, low>",
     "key_issues": ["<issue 1>", "<issue 2>"],
     "suggested_acts": ["<Act 1>", "<Act 2>"],
@@ -56,6 +57,8 @@ Jurisdiction:
 - If the query names an Indian state/UT or a city in one, return its ISO 3166-2 code
   (e.g. Lucknow -> IN-UP, Mumbai -> IN-MH, Delhi -> IN-DL, Bengaluru -> IN-KA). Otherwise "IN".
 - Do not guess a state that is not mentioned.
+- district: the official district name for a mentioned city/district (e.g. Allahabad -> Prayagraj,
+  Noida -> Gautam Buddha Nagar, Andheri -> Mumbai Suburban). Empty if none is mentioned.
 
 Search query (search_query_en):
 - Restate the user's legal issue as a concise English search query using standard Indian legal terms.
@@ -116,6 +119,7 @@ Classify this query and return JSON."""
             # an explicit jurisdiction on the request wins over the detected one
             jurisdiction=(state.get("jurisdiction") if state.get("jurisdiction", "IN") != "IN"
                           else result.jurisdiction),
+            district=result.district,
             tokens_used=usage.total,
             classification=ClassificationMeta(
                 urgency=result.urgency,

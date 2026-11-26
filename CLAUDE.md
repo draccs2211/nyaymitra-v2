@@ -45,9 +45,9 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 - New tests must not call paid APIs unless marked `@pytest.mark.paid`.
 
 ## Known issues (priority order)
-1. Legal content needs lawyer review: IPC 376 -> "BNS 63" (punishment is likely BNS 64) in `legal_reference_mcp.py`, `guardian.py`, `data/legal_corpus/curated_summaries.jsonl`; UP Rent Act "30-day deposit return" claim; whole IPC->BNS table
+1. Legal content needs lawyer review: 9 Act files in `data/legal_corpus/` (BNS sections 20 and 34 were empty after conversion and were filled from the well-known one-line text — verify against the PDF); 8 Act files use the India Code home page as `source_url` (need the exact Act page); IPC->BNS mapping `data/reference/ipc_bns_mapping.json`; UP Rent Act "30-day deposit return" claim in `curated_summaries.jsonl`
 2. Approval checkpointer is in-memory (`get_checkpointer()` in `pipeline.py`): pending reviews are marked `expired` (410) after a restart. Local Postgres `DATABASE_URL` doesn't connect; fix it, then use a Postgres saver (needs `langgraph-checkpoint-postgres`)
-3. Referral always returns Lucknow DLSA; DLSA + templates MCP servers not wired
+3. DLSA referral covers UP only (`data/referral/up_dlsa_directory.json`, 74 of 75 districts — Amethi missing, 16 without phone); templates MCP server not wired
 4. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
 5. Cases are visible only to their creator, not firm colleagues (product decision)
 6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first

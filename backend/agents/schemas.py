@@ -87,6 +87,7 @@ class ClassificationLLMOutput(BaseModel):
     language: Language = "en"
     search_query_en: str = ""
     jurisdiction: str = "IN"      # IN-XX if the query names an Indian state/UT (or a city in it)
+    district: str = ""            # official district name if the query names a district/city
     urgency: Urgency = "low"
     key_issues: List[str] = Field(default_factory=list)
     suggested_acts: List[str] = Field(default_factory=list)
@@ -96,6 +97,12 @@ class ClassificationLLMOutput(BaseModel):
     @classmethod
     def _domain(cls, v):
         return _coerce_choice(v, tuple(LEGAL_DOMAINS), "general")
+
+    @field_validator("district", mode="before")
+    @classmethod
+    def _district(cls, v):
+        v = " ".join(str(v or "").split())[:80]
+        return "" if v.lower() in ("", "none", "null", "unknown", "n/a") else v
 
     @field_validator("jurisdiction", mode="before")
     @classmethod
@@ -156,6 +163,7 @@ class OrchestratorOutput(_Base):
     language: Language
     search_query_en: str = ""
     jurisdiction: Optional[str] = None
+    district: Optional[str] = None
     classification: ClassificationMeta
 
 
@@ -324,10 +332,14 @@ class DraftingOutput(_Base):
 
 class DlsaOffice(_Base):
     name: str
-    address: str
-    phone: str
-    helpline: str
-    timing: str
+    district: str = ""
+    state: str = ""
+    secretary: str = ""
+    phone: str = ""
+    as_of: str = ""                 # date the contact was collected
+    source_url: str = ""
+    verified_by_human: bool = False
+    helpline: str = "15100"
 
 
 class ReferralOutput(_Base):

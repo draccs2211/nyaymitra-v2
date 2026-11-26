@@ -8,7 +8,8 @@ class NyayMitraState(TypedDict):
     language: str                    # hi, en, hinglish
     session_id: str
     user_id: str
-    jurisdiction: str                # IN or IN-<state>; recorded, not yet used for retrieval
+    jurisdiction: str                # IN or IN-<state>; request value, else detected by orchestrator
+    district: str                    # official district name if mentioned ("" otherwise)
 
     # Conversation
     conversation_history: List[Dict[str, str]]
@@ -81,6 +82,7 @@ def initial_state(**overrides) -> NyayMitraState:
         "session_id": "",
         "user_id": "",
         "jurisdiction": "IN",
+        "district": "",
         "conversation_history": [],
         "legal_domain": "general",
         "requested_actions": [],
