@@ -74,14 +74,15 @@ class TestGuardianAgent:
 
 @pytest.mark.paid
 class TestOrchestratorAgent:
-    @pytest.mark.parametrize("query,expected", [
-        ("My client's landlord in Lucknow is not returning the security deposit", "IN-UP"),
-        ("Tenant in Andheri, Mumbai wants rent receipt from landlord", "IN-MH"),
-        ("Explain the grounds for anticipatory bail", "IN"),
+    @pytest.mark.parametrize("query,expected,district", [
+        ("My client's landlord in Lucknow is not returning the security deposit", "IN-UP", "Lucknow"),
+        ("Tenant in Allahabad wants rent receipt from landlord", "IN-UP", "Prayagraj"),
+        ("Explain the grounds for anticipatory bail", "IN", ""),
     ])
-    def test_jurisdiction_detection(self, query, expected):
+    def test_jurisdiction_detection(self, query, expected, district):
         result = orchestrator_agent(make_state(user_query=query))
         assert result["jurisdiction"] == expected
+        assert result["district"] == district
 
     def test_criminal_domain_detection(self):
         state = make_state(user_query="I want to file FIR against my neighbor")
