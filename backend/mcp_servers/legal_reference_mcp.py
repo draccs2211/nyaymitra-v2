@@ -1,26 +1,8 @@
 from fastmcp import FastMCP
 from backend.utils.cache import cache_get_json, cache_set_json, make_key
+from backend.utils.ipc_bns import lookup_ipc
 
 mcp = FastMCP("Legal Reference MCP Server")
-
-# IPC to BNS mapping (key sections)
-IPC_TO_BNS = {
-    "302": {"bns": "101", "description": "Murder", "punishment": "Death or life imprisonment + fine"},
-    "304": {"bns": "105", "description": "Culpable homicide not amounting to murder", "punishment": "Life imprisonment or 10 years + fine"},
-    "307": {"bns": "109", "description": "Attempt to murder", "punishment": "10 years to life imprisonment"},
-    "354": {"bns": "74", "description": "Assault on woman with intent to outrage modesty", "punishment": "1-5 years + fine"},
-    "376": {"bns": "63", "description": "Rape", "punishment": "7 years to life imprisonment"},
-    "379": {"bns": "303", "description": "Theft", "punishment": "3 years or fine or both"},
-    "380": {"bns": "305", "description": "Theft in dwelling house", "punishment": "7 years + fine"},
-    "392": {"bns": "309", "description": "Robbery", "punishment": "10 years + fine"},
-    "395": {"bns": "310", "description": "Dacoity", "punishment": "Life imprisonment or 10 years + fine"},
-    "406": {"bns": "316", "description": "Criminal breach of trust", "punishment": "3 years or fine or both"},
-    "420": {"bns": "318", "description": "Cheating and dishonestly inducing delivery of property", "punishment": "7 years + fine"},
-    "498A": {"bns": "85", "description": "Cruelty by husband or relatives", "punishment": "3 years + fine"},
-    "504": {"bns": "352", "description": "Intentional insult to provoke breach of peace", "punishment": "2 years or fine or both"},
-    "506": {"bns": "351", "description": "Criminal intimidation", "punishment": "2-7 years + fine"},
-    "509": {"bns": "79", "description": "Word or gesture intended to insult modesty of woman", "punishment": "3 years or fine or both"},
-}
 
 # Key legal provisions
 LEGAL_PROVISIONS = {
@@ -117,23 +99,32 @@ async def get_ipc_section(section_number: str) -> dict:
     if cached:
         return cached
 
-    section = IPC_TO_BNS.get(section_number)
-    if section:
+    found = lookup_ipc(section_number)
+    if found and found["carried_into_bns"]:
+        bns = found["bns"]
         result = {
             "status": "found",
             "ipc_section": f"Section {section_number} IPC",
-            "bns_equivalent": f"Section {section['bns']} BNS 2023",
-            "description": section["description"],
-            "punishment": section["punishment"],
-            "note": "India has replaced IPC with Bharatiya Nyaya Sanhita (BNS) 2023. Both may be applicable depending on when the offence was committed.",
-            "official_source": "https://legislative.gov.in"
+            "bns_equivalent": "; ".join(f"Section {b['section']} BNS 2023" for b in bns),
+            "description": "; ".join(f"BNS {b['section']}: {b['title']}" for b in bns if b["title"]),
+            "punishment": " || ".join(f"BNS {b['section']}: {b['punishment_text']}" for b in bns if b["punishment_text"]),
+            "note": "Mapping and text come from the BNS 2023 reference compilation in the corpus; verify against the official Act. "
+                    "Offences committed before 1 July 2024 are still governed by the IPC.",
+            "official_source": "https://www.indiacode.nic.in/handle/123456789/20062",
+        }
+    elif found:
+        result = {
+            "status": "not_found",
+            "ipc_section": f"Section {section_number} IPC",
+            "message": "This IPC section was not carried into the Bharatiya Nyaya Sanhita, 2023 (per the corresponding-section table).",
+            "official_source": "https://www.indiacode.nic.in",
         }
     else:
         result = {
             "status": "not_found",
             "ipc_section": f"Section {section_number} IPC",
-            "message": "Section not in quick reference. Please check India Code website.",
-            "official_source": "https://www.indiacode.nic.in"
+            "message": "IPC section not found in the IPC-BNS table. Please check India Code website.",
+            "official_source": "https://www.indiacode.nic.in",
         }
 
     cache_set_json(cache_key, result, 604800)

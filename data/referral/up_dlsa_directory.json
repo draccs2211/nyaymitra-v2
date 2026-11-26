@@ -1,0 +1,671 @@
+{
+ "note": "Secretaries are transferred often; treat names/phones as 'as of collected'. Addresses not on source page.",
+ "dlsa": [
+  {
+   "district": "Agra",
+   "state": "Uttar Pradesh",
+   "secretary": "Pankaj Kumar-1",
+   "phone": "9068333712",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Aligarh",
+   "state": "Uttar Pradesh",
+   "secretary": "Sakshi Garg",
+   "phone": "9411604148",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Ambedkarnagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Neelam Verma",
+   "phone": "9452036632",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Amroha",
+   "state": "Uttar Pradesh",
+   "secretary": "Abhishek Kumar Vya",
+   "phone": "9411221108",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Auraiya",
+   "state": "Uttar Pradesh",
+   "secretary": "Roma Gupta",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Ayodhya",
+   "state": "Uttar Pradesh",
+   "secretary": "Ranjini Shukla",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Azamgarh",
+   "state": "Uttar Pradesh",
+   "secretary": "Ankit Verma",
+   "phone": "8887333871",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Badaun",
+   "state": "Uttar Pradesh",
+   "secretary": "Anchal Rana Dhawan",
+   "phone": "8447956061",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Baghpat",
+   "state": "Uttar Pradesh",
+   "secretary": "Ankita Singh-Ii",
+   "phone": "9412783693",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Bahraich",
+   "state": "Uttar Pradesh",
+   "secretary": "Vinod Kumar Yadav",
+   "phone": "9415111027",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Ballia",
+   "state": "Uttar Pradesh",
+   "secretary": "Chandra Prakash Tiwari-Ii",
+   "phone": "7838079824",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Balrampur",
+   "state": "Uttar Pradesh",
+   "secretary": "Yashpal Verma",
+   "phone": "9839336060",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Banda",
+   "state": "Uttar Pradesh",
+   "secretary": "Saurav Singh",
+   "phone": "9532946541",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Barabanki",
+   "state": "Uttar Pradesh",
+   "secretary": "Ujjwal Upadhyay",
+   "phone": "9532779165",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Bareilly",
+   "state": "Uttar Pradesh",
+   "secretary": "Jaya Priyadarshini",
+   "phone": "9454098458",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Basti",
+   "state": "Uttar Pradesh",
+   "secretary": "Devendra Kumar-I",
+   "phone": "9450474651",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Bhadohi",
+   "state": "Uttar Pradesh",
+   "secretary": "Kisa Zaheer",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Bijnor",
+   "state": "Uttar Pradesh",
+   "secretary": "Swati Chandra",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Bulandshahr",
+   "state": "Uttar Pradesh",
+   "secretary": "Vikas Chaudhary",
+   "phone": "9560069879",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Chandauli",
+   "state": "Uttar Pradesh",
+   "secretary": "Nikita Gour",
+   "phone": "9453002586",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Chitrakoot",
+   "state": "Uttar Pradesh",
+   "secretary": "Ila Chaudhary",
+   "phone": "9452075264",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Deoria",
+   "state": "Uttar Pradesh",
+   "secretary": "Archana-Ii",
+   "phone": "6392918835",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Etah",
+   "state": "Uttar Pradesh",
+   "secretary": "Yugal Chandra Chaudhary",
+   "phone": "8439970992",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Etawah",
+   "state": "Uttar Pradesh",
+   "secretary": "Arti Dwivedi",
+   "phone": "9648906956",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Farrukhabad",
+   "state": "Uttar Pradesh",
+   "secretary": "Bindiya Bhatnagar",
+   "phone": "8004461923",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Fatehpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Palash Ganguly",
+   "phone": "8004989301",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Firozabad",
+   "state": "Uttar Pradesh",
+   "secretary": "Yogesh Shiva",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Gautam Buddha Nagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Shivani Rawat",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Ghaziabad",
+   "state": "Uttar Pradesh",
+   "secretary": "Neha Banaudhia",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Ghazipur",
+   "state": "Uttar Pradesh",
+   "secretary": "Neeraj Gond",
+   "phone": "8542066916",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Gonda",
+   "state": "Uttar Pradesh",
+   "secretary": "Ankita Singh-I",
+   "phone": "7007387344",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Gorakhpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Minakshi Sinha",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Hamirpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Vandana Agarwal",
+   "phone": "9453023751",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Hapur",
+   "state": "Uttar Pradesh",
+   "secretary": null,
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Hardoi",
+   "state": "Uttar Pradesh",
+   "secretary": "Smita Goswami",
+   "phone": "9452774110",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Hathras",
+   "state": "Uttar Pradesh",
+   "secretary": "Anu Chaudhary",
+   "phone": "9412757724",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Jalaun",
+   "state": "Uttar Pradesh",
+   "secretary": "Manali Chandra",
+   "phone": "7985541831",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Jaunpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Sushil Kumar Singh",
+   "phone": "7307374242",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Jhansi",
+   "state": "Uttar Pradesh",
+   "secretary": "Isha Tripathi",
+   "phone": "9451855134",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kannauj",
+   "state": "Uttar Pradesh",
+   "secretary": "Pomela Srivastava",
+   "phone": "9453241011",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kanpur Dehat",
+   "state": "Uttar Pradesh",
+   "secretary": "Noopur Srivastava",
+   "phone": "7618843101",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kanpur Nagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Abhinav Tiwari",
+   "phone": "9450933051",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kasganj",
+   "state": "Uttar Pradesh",
+   "secretary": "Shalini Vidhey",
+   "phone": "8171815980",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kaushambi",
+   "state": "Uttar Pradesh",
+   "secretary": "Priya Singh",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Kushinagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Bhuwan",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Lakhimpur Kheri",
+   "state": "Uttar Pradesh",
+   "secretary": "Ambareesh Tripathi",
+   "phone": "9721888123",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Lalitpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Devpriy Saraswat",
+   "phone": "9415227617",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Lucknow",
+   "state": "Uttar Pradesh",
+   "secretary": "Kuwar Mitresh Singh Kushwaha",
+   "phone": "9451760600",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Maharajganj",
+   "state": "Uttar Pradesh",
+   "secretary": "Sunil Kumar Nagar",
+   "phone": "8004026914",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Mahoba",
+   "state": "Uttar Pradesh",
+   "secretary": "Harihar Gupta",
+   "phone": "9358995171",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Mainpuri",
+   "state": "Uttar Pradesh",
+   "secretary": "Nutan Chauhan",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Mathura",
+   "state": "Uttar Pradesh",
+   "secretary": "Anita Singh",
+   "phone": "9412777477",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Mau",
+   "state": "Uttar Pradesh",
+   "secretary": "Siddharth Chaturvedi",
+   "phone": "9415235212",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Meerut",
+   "state": "Uttar Pradesh",
+   "secretary": "Sonika Verma",
+   "phone": "9412783870",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Mirzapur",
+   "state": "Uttar Pradesh",
+   "secretary": "Anand Kumar-Ii",
+   "phone": "8765711300",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Moradabad",
+   "state": "Uttar Pradesh",
+   "secretary": "Tapasya Tripathi",
+   "phone": "9412237971",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Muzaffarnagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Satyendra Kumar Chaudhary",
+   "phone": "9450726151",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Pilibhit",
+   "state": "Uttar Pradesh",
+   "secretary": "Arun Kiranti Yashodas",
+   "phone": "9412297873",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Pratapgarh",
+   "state": "Uttar Pradesh",
+   "secretary": "Shambhavi Ii",
+   "phone": "9717246787",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Prayagraj",
+   "state": "Uttar Pradesh",
+   "secretary": "Pradipti Singh",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Raebareli",
+   "state": "Uttar Pradesh",
+   "secretary": "Anisha",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Rampur",
+   "state": "Uttar Pradesh",
+   "secretary": "Sandeep Singh-I",
+   "phone": "9412718496",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Saharanpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Ashutosh Tiwari",
+   "phone": "7754071133",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Sambhal",
+   "state": "Uttar Pradesh",
+   "secretary": "Deepak Kumar Jaiswal",
+   "phone": "9554547930",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Sant Kabir Nagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Ananya Sah",
+   "phone": "7800321690",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Shahjahanpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Apeksha Singh",
+   "phone": "9455558392",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Shamli",
+   "state": "Uttar Pradesh",
+   "secretary": "Akshaydeep Yadav",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Shravasti",
+   "state": "Uttar Pradesh",
+   "secretary": "Anupriya",
+   "phone": "9452288598",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Siddharthnagar",
+   "state": "Uttar Pradesh",
+   "secretary": "Shailendra Nath",
+   "phone": "8726270583",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Sitapur",
+   "state": "Uttar Pradesh",
+   "secretary": "Alok Yadav",
+   "phone": null,
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Sonbhadra",
+   "state": "Uttar Pradesh",
+   "secretary": "Rahul",
+   "phone": "9415249489",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Sultanpur",
+   "state": "Uttar Pradesh",
+   "secretary": "Mukta Tyagi",
+   "phone": "7906218244",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Unnao",
+   "state": "Uttar Pradesh",
+   "secretary": "Ratnesh Deep Kamal Anand",
+   "phone": "9450943466",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  },
+  {
+   "district": "Varanasi",
+   "state": "Uttar Pradesh",
+   "secretary": "Rajeev Mukul Panday",
+   "phone": "7007737631",
+   "source_url": "https://uttarpradesh.nalsa.gov.in/dlsa-directory/",
+   "collected": "2026-11-26",
+   "verified_by_human": true
+  }
+ ]
+}

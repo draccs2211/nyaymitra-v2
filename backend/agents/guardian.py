@@ -62,7 +62,7 @@ IMMEDIATE_LEGAL_REMEDIES = {
             "Medical examination within 24 hours critical for evidence",
             "Apply for compensation under victim compensation scheme"
         ],
-        "sections": ["Section 376 IPC / Section 63 BNS (Rape)", "Section 354 IPC / Section 74 BNS (Molestation)", "POCSO Act if victim minor"],
+        "sections": ["Section 376 IPC / Sections 63-64 BNS (Rape)", "Section 354 IPC / Section 74 BNS (Molestation)", "POCSO Act if victim minor"],
         "court": "Special Court / Sessions Court",
         "time_sensitivity": "File FIR within 24 hours — evidence preservation critical"
     },

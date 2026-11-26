@@ -129,7 +129,7 @@ class TestSectionExtraction:
     @pytest.mark.parametrize("query,expected", [
         ("Is Section 420 IPC applicable?", ["420", "406"]),
         ("s. 498a of the IPC and 406 IPC", ["498A", "406"]),
-        ("IPC 302 vs BNS 101", ["302", "406"]),
+        ("IPC 302 vs BNS 103", ["302", "406"]),
         ("धारा 376 IPC", ["376", "406"]),
         ("Section 154 CrPC and Rs 50000 deposit", ["406"]),    # non-IPC / amounts ignored
     ])

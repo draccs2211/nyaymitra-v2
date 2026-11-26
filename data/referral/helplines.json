@@ -1,0 +1,46 @@
+{
+ "helplines": [
+  {
+   "name": "NALSA Legal Aid Helpline",
+   "number": "15100",
+   "scope": "free legal aid, national",
+   "source_url": "https://nalsa.gov.in/womens-assistance/",
+   "verified_by_human": false
+  },
+  {
+   "name": "Emergency (police/fire/ambulance)",
+   "number": "112",
+   "source_url": null,
+   "verified_by_human": false,
+   "needs_source": true
+  },
+  {
+   "name": "Women Helpline",
+   "number": "181",
+   "source_url": null,
+   "verified_by_human": false,
+   "needs_source": true
+  },
+  {
+   "name": "Cyber Crime",
+   "number": "1930",
+   "source_url": null,
+   "verified_by_human": false,
+   "needs_source": true
+  },
+  {
+   "name": "Childline",
+   "number": "1098",
+   "source_url": null,
+   "verified_by_human": false,
+   "needs_source": true
+  },
+  {
+   "name": "National Consumer Helpline",
+   "number": "1915",
+   "source_url": null,
+   "verified_by_human": false,
+   "needs_source": true
+  }
+ ]
+}
