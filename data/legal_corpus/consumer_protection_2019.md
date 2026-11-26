@@ -2,7 +2,7 @@
 act: The Consumer Protection Act, 2019
 domain: consumer
 jurisdiction: IN
-source_url: https://www.indiacode.nic.in
+source_url: https://www.indiacode.nic.in/bitstream/123456789/18964/1/cpa.pdf
 source_name: India Code (official text)
 date: 2019-08-09
 ---

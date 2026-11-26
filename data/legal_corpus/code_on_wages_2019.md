@@ -2,7 +2,7 @@
 act: The Code on Wages, 2019
 domain: labor
 jurisdiction: IN
-source_url: https://www.indiacode.nic.in
+source_url: https://indiacode.nic.in/handle/123456789/15793
 source_name: India Code (official text)
 date: 2019-08-08
 ---

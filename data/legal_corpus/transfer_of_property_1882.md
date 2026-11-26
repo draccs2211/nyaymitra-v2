@@ -2,7 +2,7 @@
 act: The Transfer of Property Act, 1882
 domain: property
 jurisdiction: IN
-source_url: https://www.indiacode.nic.in
+source_url: https://indiacode.nic.in/handle/123456789/2338
 source_name: India Code (official text)
 date: 1882
 ---

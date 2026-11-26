@@ -2,7 +2,7 @@
 act: The Protection of Women from Domestic Violence Act, 2005
 domain: family
 jurisdiction: IN
-source_url: https://www.indiacode.nic.in
+source_url: https://www.indiacode.nic.in/handle/123456789/2021
 source_name: India Code (official text)
 date: 2005-09-13
 ---

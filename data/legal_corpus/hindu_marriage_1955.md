@@ -2,7 +2,7 @@
 act: The Hindu Marriage Act, 1955
 domain: family
 jurisdiction: IN
-source_url: https://www.indiacode.nic.in
+source_url: https://indiacode.nic.in/handle/123456789/1560
 source_name: India Code (official text)
 date: 1955
 ---
