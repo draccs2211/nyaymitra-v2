@@ -231,7 +231,10 @@ def load_data(prune: bool = True, dry_run: bool = False, corpus_dir: Path = CORP
 
     from backend.rag.hybrid_search import hybrid_rag  # lazy: heavy imports
 
-    hybrid_rag.add_documents(docs)
+    loaded = hybrid_rag.add_documents(docs)
+    counts.update(loaded)
+    print(f"Embedded {loaded['embedded']} new/changed docs, updated metadata of {loaded['updated']}, "
+          f"re-inserted {loaded['reinserted']}")
     if prune:
         counts["removed"] = hybrid_rag.delete_ids_not_in([d["id"] for d in docs])
         print(f"Removed {counts['removed']} stale docs")

@@ -370,52 +370,62 @@ class HybridRAG:
 
     # ── Add Documents ─────────────────────────────────────────────────────────
 
-    def add_documents(self, documents: List[Dict]):
+    def add_documents(self, documents: List[Dict]) -> Dict[str, int]:
         """
-        Idempotently upsert documents into ChromaDB, then rebuild BM25 from
-        the full collection so both indexes hold the same canonical IDs.
-        Each document must have: id (canonical, deterministic), content, metadata (optional).
+        Incremental, idempotent load into ChromaDB, then BM25 rebuilt from the full
+        collection (same canonical IDs in both).
+        - new IDs (new or edited text): embedded (only case that loads the model)
+        - existing IDs: metadata updated in place, no re-embedding
+        - existing IDs whose stored metadata has keys the new metadata lacks: re-inserted
+          with their stored embedding (Chroma merges metadata on update)
+        Each document must have: id (canonical, deterministic), content, metadata.
         """
         if not documents:
-            return
+            return {"embedded": 0, "updated": 0, "reinserted": 0}
 
-        ids, texts, metadatas, embeddings = [], [], [], []
-        seen = set()
-
+        by_id: Dict[str, Dict] = {}
         for doc in documents:
-            canonical_id = doc["id"]
-            if canonical_id in seen:
+            if doc["id"] in by_id:
                 continue  # duplicate within batch — Chroma rejects these
-            seen.add(canonical_id)
-            ids.append(canonical_id)
-            texts.append(doc["content"])
             # Validate against canonical schema — raises on bad corpus data
-            metadatas.append(DocMetadata.model_validate(doc.get("metadata") or {}).to_chroma())
-            embeddings.append(self.get_embedding(doc["content"]))
+            meta = DocMetadata.model_validate(doc.get("metadata") or {}).to_chroma()
+            by_id[doc["id"]] = {"content": doc["content"], "metadata": meta}
 
-        # Chroma upsert MERGES metadata, so keys removed from the schema would
-        # linger. Delete docs whose stored keys aren't a subset of the new ones.
-        existing = self.collection.get(ids=ids, include=["metadatas"])
-        new_keys = {i: set(m) for i, m in zip(ids, metadatas)}
-        stale = [
-            i for i, m in zip(existing["ids"], existing["metadatas"] or [])
-            if set(m or {}) - new_keys[i]
-        ]
-        if stale:
-            self.collection.delete(ids=stale)
+        ids = list(by_id)
+        existing = self.collection.get(ids=ids, include=["metadatas", "embeddings"])
+        stored = {i: (m or {}, e) for i, m, e in zip(
+            existing["ids"], existing["metadatas"] or [], existing["embeddings"]
+            if existing.get("embeddings") is not None else [None] * len(existing["ids"]))}
 
-        # Upsert: re-running with same IDs updates instead of duplicating
-        self.collection.upsert(
-            ids=ids,
-            documents=texts,
-            metadatas=metadatas,
-            embeddings=embeddings
-        )
+        new_ids = [i for i in ids if i not in stored]
+        reinsert = [i for i in ids if i in stored and set(stored[i][0]) - set(by_id[i]["metadata"])]
+        update = [i for i in ids if i in stored and i not in reinsert]
+
+        if new_ids:
+            vectors = self.embed_many([by_id[i]["content"] for i in new_ids])
+            self.collection.add(
+                ids=new_ids, documents=[by_id[i]["content"] for i in new_ids],
+                metadatas=[by_id[i]["metadata"] for i in new_ids], embeddings=vectors,
+            )
+        if update:
+            self.collection.update(ids=update, metadatas=[by_id[i]["metadata"] for i in update])
+        if reinsert:
+            vectors = [list(stored[i][1]) for i in reinsert]
+            self.collection.delete(ids=reinsert)
+            self.collection.add(
+                ids=reinsert, documents=[by_id[i]["content"] for i in reinsert],
+                metadatas=[by_id[i]["metadata"] for i in reinsert], embeddings=vectors,
+            )
 
         # BM25 mirrors the FULL collection, not just this batch
         self.rebuild_bm25_from_chroma()
+        counts = {"embedded": len(new_ids), "updated": len(update), "reinserted": len(reinsert)}
+        logger.info("Corpus load: %s — ChromaDB + BM25 in sync", counts)
+        return counts
 
-        logger.info(f"Upserted {len(ids)} docs — ChromaDB + BM25 in sync ✅")
+    def embed_many(self, texts: List[str], batch_size: int = 64) -> List[List[float]]:
+        """Batch embedding (much faster than one call per document)."""
+        return self.embedding_model.encode(texts, batch_size=batch_size, show_progress_bar=False).tolist()
 
     def delete_ids_not_in(self, keep_ids: List[str]) -> int:
         """Remove docs whose IDs aren't in keep_ids (stale/legacy). Returns count removed."""
