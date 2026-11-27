@@ -3,7 +3,7 @@ act: The Code on Social Security, 2020
 domain: labor
 jurisdiction: IN
 source_url: https://www.labour.gov.in/static/uploads/2025/07/b0620548445580767b5c0d18c95c26f7.pdf
-source_name: Gazette of India (Act No. 36 of 2020)
+source_name: Gazette of India (Act No. 36 of 2020), as enacted; in force from 21 November 2025
 date: 2020-09-28
 ---
 

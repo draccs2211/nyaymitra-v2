@@ -3,7 +3,7 @@ act: The Code on Wages, 2019
 domain: labor
 jurisdiction: IN
 source_url: https://indiacode.nic.in/handle/123456789/15793
-source_name: India Code (official text)
+source_name: India Code (official text); in force from 21 November 2025
 date: 2019-08-08
 ---
 

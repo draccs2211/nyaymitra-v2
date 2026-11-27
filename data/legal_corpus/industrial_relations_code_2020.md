@@ -3,7 +3,7 @@ act: The Industrial Relations Code, 2020
 domain: labor
 jurisdiction: IN
 source_url: https://www.labour.gov.in/static/uploads/2025/07/682a44b5426bff2c1f4943ee1b2fd566.pdf
-source_name: Gazette of India (Act No. 35 of 2020)
+source_name: Gazette of India (Act No. 35 of 2020), as enacted; in force from 21 November 2025; s.104 amended by Act 1 of 2026 (amended text not included)
 date: 2020-09-28
 ---
 
