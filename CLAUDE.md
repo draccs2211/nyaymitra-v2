@@ -52,7 +52,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 5. Cases are visible only to their creator, not firm colleagues (product decision)
 6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
 7. Indian Kanoon API key not purchased (research reports `not_configured`)
-8. Retrieval misses informal labour phrasing ("fired without notice" does not reach IRC s.70 retrenchment) since the Labour Codes were added; fix via statutory-term rewrite or rerank
+8. Retrieval misses informal labour phrasing ("fired without notice" does not reach IRC s.70 retrenchment in en; the Hindi version ranks #4-6 after the OSH Code) since the Labour Codes were added; fix via statutory-term rewrite or rerank
 
 ## Later
 Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.
