@@ -3,7 +3,7 @@ act: The Industrial Relations Code, 2020
 domain: labor
 jurisdiction: IN
 source_url: https://www.labour.gov.in/static/uploads/2025/07/682a44b5426bff2c1f4943ee1b2fd566.pdf
-source_name: Gazette of India (Act No. 35 of 2020), as enacted; in force from 21 November 2025; s.104 amended by Act 1 of 2026 (amended text not included)
+source_name: Gazette of India (Act No. 35 of 2020), as enacted; in force from 21 November 2025; s.104(1) substituted and s.104(1A) inserted by the Industrial Relations Code (Amendment) Act, 2026 (Act No. 1 of 2026, Gazette CG-DL-E-16022026-270186), deemed in force from 21 November 2025
 date: 2020-09-28
 ---
 
@@ -1224,10 +1224,11 @@ Provided that no order shall be made under this section after the expiry of thre
 (2) Every order made under this section shall be laid before each House of Parliament.
 
 ## Section 104 — Repeal and savings
-(1) In the notification issued under sub-section (3) of section 1 for the commencement of any provision of this Code, the Central Government may specify that the provisions of—
+(1) The following enactments shall stand repealed on and from the date appointed in the notification issued under sub-section (3) of section 1, namely:—
 (a) the Trade Unions Act, 1926;
 (b) the Industrial Employment (Standing Orders) Act, 1946; and
-(c) the Industrial Disputes Act, 1947, shall stand repealed with effect from the date appointed in the notification in this behalf and the remaining provisions of the enactments referred to in clauses (a) to (c) shall remain in force till they are repealed by like notifications in the like manner.
+(c) the Industrial Disputes Act, 1947.
+(1A) Notwithstanding such repeal under sub-section (1), the functioning of the Tribunals and statutory authorities functioning under the Acts so repealed shall continue to function till such Tribunals and other statutory authorities becomes functional under this Code.
 (2) Notwithstanding such repeal under sub-section (1), anything done or any action taken under the provisions of the enactments so repealed including any rule, regulation, notification, nomination, appointment, order or direction made thereunder shall be deemed to have been done or taken under the corresponding provisions of this Code and shall be in force to the extent they are not contrary to the provisions of this Code.
 (3) Without prejudice to the provisions of sub-section (2), the provisions of section 6 of the General Clauses Act, 1897 shall apply to the repeal of such enactments.
 
