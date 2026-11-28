@@ -52,7 +52,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 5. Cases are visible only to their creator, not firm colleagues (product decision)
 6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
 7. Indian Kanoon API key not purchased (research reports `not_configured`)
-8. Informal wording ("fired without notice") vs statute terms: orchestrator now emits `search_terms_en` (statutory vocabulary, no Acts/sections) as a third retrieval query; with hand-written terms all eval items hit top-5 (Hindi wrongful_termination still #4). Not yet verified with real LLM terms: `python -m backend.evaluation.generate_rewrites` (paid, 54 calls) then `retrieval_eval --llm-rewrites`
+8. Informal wording ("fired without notice") vs statute terms: mitigated. Orchestrator emits `search_terms_en` (statutory vocabulary; phrases with numbers dropped) as a third retrieval query. Verified 2026-11-28 with real gpt-4o-mini terms (54 calls): hit@5 1.0 in en/hi/hinglish, MRR@10 en 0.963 / hi 0.931 / hinglish 0.880. Re-check after prompt changes: `python -m backend.evaluation.generate_rewrites --out r.json` (paid) then `retrieval_eval --llm-rewrites r.json`
 
 ## Later
 Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.

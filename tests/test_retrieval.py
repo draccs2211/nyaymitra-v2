@@ -64,6 +64,11 @@ class TestRewriteWiring:
         out = orchestrator.orchestrator_agent(make_state(user_query="bina notice ke nikal diya"))
         assert out["search_terms_en"] == "retrenchment of worker, termination of service"
 
+    def test_statutory_terms_drop_section_numbers(self):
+        from backend.agents.schemas import ClassificationLLMOutput
+        out = ClassificationLLMOutput(search_terms_en="dowry harassment, IPC 498A, cruelty by husband")
+        assert out.search_terms_en == "dowry harassment, cruelty by husband"
+
     def test_missing_rewrite_is_empty(self, monkeypatch):
         from backend.agents import orchestrator
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({"legal_domain": "family"})))

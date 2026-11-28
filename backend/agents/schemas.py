@@ -116,6 +116,13 @@ class ClassificationLLMOutput(BaseModel):
     def _search_query(cls, v):
         return " ".join(str(v).split())[:300] if v else ""
 
+    @field_validator("search_terms_en", mode="after")
+    @classmethod
+    def _terms_no_numbers(cls, v):
+        # section numbers in search terms can point retrieval at the wrong code (IPC vs BNS
+        # numbering); the prompt forbids them, this drops any phrase that still has one
+        return ", ".join(p.strip() for p in v.split(",") if p.strip() and not any(c.isdigit() for c in p))
+
     @field_validator("language", mode="before")
     @classmethod
     def _language(cls, v):

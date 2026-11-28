@@ -68,9 +68,10 @@ Search query (search_query_en):
 
 Statutory terms (search_terms_en):
 - The words Indian statutes themselves use for this issue, so search finds the provision even when the
-  user speaks informally (e.g. "fired without notice" -> "retrenchment of worker, termination of service,
-  notice or wages in lieu of notice, retrenchment compensation"; "boss ne salary nahi di" ->
-  "non-payment of wages, delay in payment of wages, claim for unpaid wages").
+  user speaks informally (e.g. "company PF ka paisa jama nahi kar rahi" -> "employer contribution to
+  provident fund, non-deposit of contributions, recovery of dues from employer"; "builder is not giving
+  my flat even after 3 years" -> "delay in handing over possession, refund with interest by promoter,
+  compensation to allottee").
 - 3 to 6 short phrases, English, comma-separated. Legal vocabulary only:
   NO Act names, NO section numbers, NO facts that the query does not state.
 
