@@ -49,3 +49,12 @@ jobs:
       - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t nyaymitra-api:ci .
+      - name: Image contains runtime data (templates, DLSA directory, helplines)
+        run: >
+          docker run --rm --entrypoint python nyaymitra-api:ci -c
+          "from backend.templates import load_templates;
+          from backend.mcp_servers.dlsa_mcp import lookup_dlsa, load_helplines;
+          assert len(load_templates()) == 5;
+          assert lookup_dlsa('Lucknow');
+          assert load_helplines();
+          print('runtime data OK')"
