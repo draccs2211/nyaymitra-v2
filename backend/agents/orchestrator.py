@@ -26,6 +26,7 @@ Analyze the given legal query and return a JSON response with the following fiel
     "requested_actions": ["<every action the query asks for — one or more of: research, drafting, referral>"],
     "language": "<one of: en, hi, hinglish>",
     "search_query_en": "<the legal issue restated as a short English search query>",
+    "search_terms_en": "<the statutory terms Indian statutes use for this issue, comma-separated>",
     "jurisdiction": "<IN-XX ISO 3166-2 code of the Indian state/UT the matter arises in, or IN>",
     "district": "<official district name if the query names a district or city, else empty>",
     "urgency": "<one of: critical, high, medium, low>",
@@ -64,6 +65,14 @@ Search query (search_query_en):
 - Restate the user's legal issue as a concise English search query using standard Indian legal terms.
 - Translate Hindi / Hinglish faithfully (e.g. "patni pati se har mahine kharcha chahti hai" -> "wife claiming monthly maintenance from husband").
 - Do NOT add facts, section numbers or Acts that the query does not mention.
+
+Statutory terms (search_terms_en):
+- The words Indian statutes themselves use for this issue, so search finds the provision even when the
+  user speaks informally (e.g. "fired without notice" -> "retrenchment of worker, termination of service,
+  notice or wages in lieu of notice, retrenchment compensation"; "boss ne salary nahi di" ->
+  "non-payment of wages, delay in payment of wages, claim for unpaid wages").
+- 3 to 6 short phrases, English, comma-separated. Legal vocabulary only:
+  NO Act names, NO section numbers, NO facts that the query does not state.
 
 Language detection:
 - hi: Query predominantly in Hindi (Devanagari script)
@@ -116,6 +125,7 @@ Classify this query and return JSON."""
             requested_actions=result.requested_actions,
             language=result.language,
             search_query_en=result.search_query_en,
+            search_terms_en=result.search_terms_en,
             # an explicit jurisdiction on the request wins over the detected one
             jurisdiction=(state.get("jurisdiction") if state.get("jurisdiction", "IN") != "IN"
                           else result.jurisdiction),

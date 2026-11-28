@@ -1,5 +1,5 @@
 {
- "description": "Retrieval eval: same intent in en / hi (Devanagari) / hinglish (Roman). A hit is any top-k doc matching ANY relevance rule. Rules: {field: value} where 'topic'/'section'/'doc_type' must equal and 'act' must contain value. Statutory rules (act+section) accept the official Act text in data/legal_corpus; section titles verified against the corpus files.",
+ "description": "Retrieval eval: same intent in en / hi (Devanagari) / hinglish (Roman). A hit is any top-k doc matching ANY relevance rule. Rules: {field: value} where 'topic'/'section'/'doc_type' must equal and 'act' must contain value. Statutory rules (act+section) accept the official Act text in data/legal_corpus; section titles verified against the corpus files. terms_en: hand-written statutory terms (no Acts or section numbers), a stand-in for the orchestrator's search_terms_en in the 'hybrid+en+terms (oracle)' method.",
  "items": [
   {
    "id": "security_deposit",
@@ -13,7 +13,8 @@
    ],
    "en": "Landlord is not returning my security deposit after I vacated the flat",
    "hi": "मकान मालिक घर खाली करने के बाद सिक्योरिटी डिपॉजिट वापस नहीं कर रहा है",
-   "hinglish": "makan malik security deposit wapas nahi kar raha ghar khali karne ke baad"
+   "hinglish": "makan malik security deposit wapas nahi kar raha ghar khali karne ke baad",
+   "terms_en": "refund of security deposit by landlord on vacating tenanted premises"
   },
   {
    "id": "eviction",
@@ -24,7 +25,8 @@
    ],
    "en": "Can my landlord evict me without a court order?",
    "hi": "क्या मकान मालिक बिना कोर्ट के आदेश के किरायेदार को घर से निकाल सकता है?",
-   "hinglish": "kya landlord bina court order ke kirayedar ko ghar se nikal sakta hai"
+   "hinglish": "kya landlord bina court order ke kirayedar ko ghar se nikal sakta hai",
+   "terms_en": "eviction of tenant by landlord, grounds for eviction, release of building, order of court or Rent Controller"
   },
   {
    "id": "defective_product",
@@ -41,7 +43,8 @@
    ],
    "en": "Company sold me a defective washing machine and refuses a refund",
    "hi": "कंपनी ने खराब वॉशिंग मशीन बेची और पैसे वापस नहीं कर रही",
-   "hinglish": "company ne kharab washing machine bechi aur refund nahi de rahi"
+   "hinglish": "company ne kharab washing machine bechi aur refund nahi de rahi",
+   "terms_en": "defect in goods, deficiency, consumer complaint, refund or replacement by trader"
   },
   {
    "id": "rti_filing",
@@ -57,7 +60,8 @@
    ],
    "en": "How do I file an RTI application and what is the fee?",
    "hi": "सूचना का अधिकार के तहत आवेदन कैसे करें और फीस कितनी है?",
-   "hinglish": "RTI application kaise file karein aur fees kitni hai"
+   "hinglish": "RTI application kaise file karein aur fees kitni hai",
+   "terms_en": "request for obtaining information, application fee, Public Information Officer"
   },
   {
    "id": "rti_appeal",
@@ -72,7 +76,8 @@
    ],
    "en": "The PIO did not reply to my RTI within 30 days, how do I appeal?",
    "hi": "जन सूचना अधिकारी ने 30 दिन में आरटीआई का जवाब नहीं दिया, अपील कैसे करें?",
-   "hinglish": "PIO ne 30 din mein RTI ka jawab nahi diya, appeal kaise karein"
+   "hinglish": "PIO ne 30 din mein RTI ka jawab nahi diya, appeal kaise karein",
+   "terms_en": "first appeal against Public Information Officer, deemed refusal, time limit for disposal of request"
   },
   {
    "id": "unpaid_salary",
@@ -87,7 +92,8 @@
    ],
    "en": "My employer has not paid my salary for two months",
    "hi": "मालिक ने दो महीने से वेतन नहीं दिया है",
-   "hinglish": "boss ne do mahine se salary nahi di hai"
+   "hinglish": "boss ne do mahine se salary nahi di hai",
+   "terms_en": "non-payment of wages, delay in payment of wages, time limit for payment of wages, claim for unpaid wages"
   },
   {
    "id": "wrongful_termination",
@@ -102,7 +108,8 @@
    ],
    "en": "I was fired from my job without any notice",
    "hi": "मुझे बिना नोटिस के नौकरी से निकाल दिया गया",
-   "hinglish": "mujhe bina notice ke naukri se nikal diya"
+   "hinglish": "mujhe bina notice ke naukri se nikal diya",
+   "terms_en": "retrenchment of worker, termination of service, notice or wages in lieu of notice, retrenchment compensation, dismissal"
   },
   {
    "id": "workplace_harassment",
@@ -125,7 +132,8 @@
    ],
    "en": "My manager is sexually harassing me at the office",
    "hi": "दफ्तर में मेरा मैनेजर मेरा यौन उत्पीड़न कर रहा है",
-   "hinglish": "office mein manager mujhe sexually harass kar raha hai"
+   "hinglish": "office mein manager mujhe sexually harass kar raha hai",
+   "terms_en": "sexual harassment of woman at workplace, complaint to Internal Committee, inquiry by employer"
   },
   {
    "id": "fir_refused",
@@ -140,7 +148,8 @@
    ],
    "en": "The police station is refusing to register my FIR",
    "hi": "थाने में पुलिस मेरी एफआईआर दर्ज नहीं कर रही",
-   "hinglish": "thane mein police meri FIR darj nahi kar rahi"
+   "hinglish": "thane mein police meri FIR darj nahi kar rahi",
+   "terms_en": "refusal to register information of cognizable offence, first information report, complaint to Superintendent of Police, Magistrate"
   },
   {
    "id": "anticipatory_bail",
@@ -155,7 +164,8 @@
    ],
    "en": "How to get anticipatory bail before arrest?",
    "hi": "गिरफ्तारी से पहले अग्रिम जमानत कैसे मिलती है?",
-   "hinglish": "giraftari se pehle anticipatory bail kaise milti hai"
+   "hinglish": "giraftari se pehle anticipatory bail kaise milti hai",
+   "terms_en": "direction for grant of bail to person apprehending arrest, anticipatory bail application, Sessions Court, High Court"
   },
   {
    "id": "divorce",
@@ -170,7 +180,8 @@
    ],
    "en": "What are the grounds for divorce under Hindu law?",
    "hi": "हिंदू विवाह अधिनियम में तलाक के आधार क्या हैं?",
-   "hinglish": "hindu marriage act mein talaq ke grounds kya hain"
+   "hinglish": "hindu marriage act mein talaq ke grounds kya hain",
+   "terms_en": "dissolution of marriage by decree of divorce, grounds for divorce, cruelty, desertion"
   },
   {
    "id": "child_custody",
@@ -181,7 +192,8 @@
    ],
    "en": "Who gets custody of a young child after the parents separate?",
    "hi": "माता-पिता के अलग होने के बाद छोटे बच्चे की कस्टडी किसे मिलती है?",
-   "hinglish": "alag hone ke baad chhote bachche ki custody kise milti hai"
+   "hinglish": "alag hone ke baad chhote bachche ki custody kise milti hai",
+   "terms_en": "custody of minor child, guardianship, welfare of the minor, natural guardian"
   },
   {
    "id": "maintenance",
@@ -196,7 +208,8 @@
    ],
    "en": "The wife wants monthly maintenance from her husband",
    "hi": "पत्नी पति से हर महीने भरण-पोषण चाहती है",
-   "hinglish": "patni pati se har mahine kharcha chahti hai"
+   "hinglish": "patni pati se har mahine kharcha chahti hai",
+   "terms_en": "order for maintenance of wife, children and parents, monthly allowance, neglect or refusal to maintain"
   },
   {
    "id": "domestic_violence",
@@ -207,7 +220,8 @@
    ],
    "en": "Husband beats his wife at home, what protection is available?",
    "hi": "पति घर पर पत्नी को मारता है, क्या सुरक्षा मिल सकती है?",
-   "hinglish": "pati ghar pe patni ko maarta hai, kya protection mil sakta hai"
+   "hinglish": "pati ghar pe patni ko maarta hai, kya protection mil sakta hai",
+   "terms_en": "domestic violence against aggrieved person, protection order, residence order, Protection Officer"
   },
   {
    "id": "dowry_cruelty",
@@ -226,7 +240,8 @@
    ],
    "en": "In-laws are harassing the woman for dowry",
    "hi": "ससुराल वाले दहेज के लिए महिला को परेशान कर रहे हैं",
-   "hinglish": "sasural wale dahej ke liye bahu ko pareshan kar rahe hain"
+   "hinglish": "sasural wale dahej ke liye bahu ko pareshan kar rahe hain",
+   "terms_en": "cruelty by husband or relatives of husband, harassment for dowry demand, dowry death"
   },
   {
    "id": "cheating",
@@ -241,7 +256,8 @@
    ],
    "en": "Someone cheated me and took my money by fraud",
    "hi": "किसी ने धोखाधड़ी करके मुझसे पैसे ले लिए",
-   "hinglish": "kisi ne dhokha dekar mujhse paise le liye"
+   "hinglish": "kisi ne dhokha dekar mujhse paise le liye",
+   "terms_en": "cheating and dishonestly inducing delivery of property, fraud, criminal breach of trust"
   },
   {
    "id": "free_legal_aid",
@@ -252,7 +268,8 @@
    ],
    "en": "I cannot afford a lawyer, how can I get free legal aid?",
    "hi": "मेरे पास वकील के पैसे नहीं हैं, मुफ्त कानूनी सहायता कैसे मिलेगी?",
-   "hinglish": "vakil ke paise nahi hain, free legal aid kaise milegi"
+   "hinglish": "vakil ke paise nahi hain, free legal aid kaise milegi",
+   "terms_en": "entitlement to free legal services, legal aid, Legal Services Authority, eligibility criteria"
   },
   {
    "id": "lok_adalat",
@@ -263,7 +280,8 @@
    ],
    "en": "Can my dispute be settled in Lok Adalat without court fees?",
    "hi": "क्या मेरा विवाद लोक अदालत में बिना कोर्ट फीस के सुलझ सकता है?",
-   "hinglish": "kya mera case lok adalat mein bina court fees ke settle ho sakta hai"
+   "hinglish": "kya mera case lok adalat mein bina court fees ke settle ho sakta hai",
+   "terms_en": "settlement of dispute in Lok Adalat, award of Lok Adalat, refund of court fee, compromise"
   }
  ]
 }

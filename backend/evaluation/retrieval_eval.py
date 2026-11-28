@@ -90,10 +90,15 @@ def default_methods(llm_rewrites: Dict[str, str] = None) -> Dict[str, Callable[[
         "hybrid (RRF)": lambda it, lang: hybrid_rag.retrieve([it[lang]], K),
         # Upper bound for query rewriting: the item's own English phrasing as the rewrite
         "hybrid+en (oracle)": lambda it, lang: hybrid_rag.retrieve([it[lang], it["en"]], K),
+        # + hand-written statutory terms per item (stand-in for search_terms_en; production path)
+        "hybrid+en+terms (oracle)": lambda it, lang: hybrid_rag.retrieve(
+            [it[lang], it["en"], it.get("terms_en", "")], K),
     }
     if llm_rewrites:
-        methods["hybrid+en (LLM)"] = lambda it, lang: hybrid_rag.retrieve(
-            [it[lang], llm_rewrites.get(f"{it['id']}:{lang}", "")], K)
+        def _llm(it, lang):
+            r = llm_rewrites.get(f"{it['id']}:{lang}", "")      # str (old files) or [rewrite, terms]
+            return hybrid_rag.retrieve([it[lang]] + ([r] if isinstance(r, str) else list(r)), K)
+        methods["hybrid+en+terms (LLM)"] = _llm
     return methods
 
 

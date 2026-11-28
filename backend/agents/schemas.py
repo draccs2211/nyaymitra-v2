@@ -86,6 +86,7 @@ class ClassificationLLMOutput(BaseModel):
     requested_actions: List[RequestedAction] = Field(default_factory=lambda: ["research"])
     language: Language = "en"
     search_query_en: str = ""
+    search_terms_en: str = ""     # statutory vocabulary for the issue (no Acts / section numbers)
     jurisdiction: str = "IN"      # IN-XX if the query names an Indian state/UT (or a city in it)
     district: str = ""            # official district name if the query names a district/city
     urgency: Urgency = "low"
@@ -110,7 +111,7 @@ class ClassificationLLMOutput(BaseModel):
         v = str(v or "").strip().upper()
         return v if re.match(r"^IN(-[A-Z]{2})?$", v) else "IN"
 
-    @field_validator("search_query_en", mode="before")
+    @field_validator("search_query_en", "search_terms_en", mode="before")
     @classmethod
     def _search_query(cls, v):
         return " ".join(str(v).split())[:300] if v else ""
@@ -162,6 +163,7 @@ class OrchestratorOutput(_Base):
     requested_actions: List[RequestedAction] = Field(min_length=1)
     language: Language
     search_query_en: str = ""
+    search_terms_en: str = ""
     jurisdiction: Optional[str] = None
     district: Optional[str] = None
     classification: ClassificationMeta

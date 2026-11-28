@@ -56,18 +56,32 @@ class TestRewriteWiring:
         out = orchestrator.orchestrator_agent(make_state(user_query="patni kharcha chahti hai"))
         assert out["search_query_en"] == "wife claiming monthly maintenance from husband"
 
+    def test_orchestrator_returns_statutory_terms(self, monkeypatch):
+        from backend.agents import orchestrator
+        monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({
+            "legal_domain": "labor", "search_query_en": "fired without notice",
+            "search_terms_en": " retrenchment of worker,\n termination of service "})))
+        out = orchestrator.orchestrator_agent(make_state(user_query="bina notice ke nikal diya"))
+        assert out["search_terms_en"] == "retrenchment of worker, termination of service"
+
     def test_missing_rewrite_is_empty(self, monkeypatch):
         from backend.agents import orchestrator
         monkeypatch.setattr(orchestrator, "OpenAI", fake_openai(json.dumps({"legal_domain": "family"})))
-        assert orchestrator.orchestrator_agent(make_state(user_query="q"))["search_query_en"] == ""
+        out = orchestrator.orchestrator_agent(make_state(user_query="q"))
+        assert out["search_query_en"] == "" and out["search_terms_en"] == ""
 
-    @pytest.mark.parametrize("rewrite,expected", [("wife maintenance", ["wife maintenance"]), ("", None)])
-    def test_research_passes_rewrite(self, monkeypatch, rewrite, expected):
+    @pytest.mark.parametrize("rewrite,terms,expected", [
+        ("wife maintenance", "", ["wife maintenance"]),
+        ("wife maintenance", "order for maintenance of wife", ["wife maintenance", "order for maintenance of wife"]),
+        ("", "order for maintenance of wife", ["order for maintenance of wife"]),
+        ("", "", None)])
+    def test_research_passes_rewrite(self, monkeypatch, rewrite, terms, expected):
         from backend.agents import research
         calls = []
         monkeypatch.setattr(research.hybrid_rag, "search",
                             lambda q, d=None, **kw: calls.append(kw.get("extra_queries")) or [])
-        research.research_agent(make_state(user_query="patni kharcha", search_query_en=rewrite))
+        research.research_agent(make_state(user_query="patni kharcha", search_query_en=rewrite,
+                                           search_terms_en=terms))
         assert calls == [expected]
 
 
@@ -94,22 +108,26 @@ class TestRetrievalQuality:
         if hybrid_rag.collection.count() == 0:
             pytest.skip("corpus not loaded — run python -m backend.data_loader")
         methods = {k: v for k, v in ev.default_methods().items()
-                   if k in ("hybrid (RRF)", "hybrid+en (oracle)")}
+                   if k in ("hybrid (RRF)", "hybrid+en (oracle)", "hybrid+en+terms (oracle)")}
         return ev.evaluate(methods, ev.load_items())["results"]
 
-    # Floors re-based 2026-11-26 on the full corpus (9 Acts, ~3.5k chunks); measured:
-    # hybrid+en  en 0.884 / hi 0.935 / hinglish 0.815 MRR@10; hybrid en 0.884 / hi 0.675.
+    # Floors re-based 2026-11-28 on 13 Acts (5.2k chunks). Measured, hybrid+en+terms:
+    # en 1.0 / hi 1.0 / hinglish 1.0 hit@5; MRR@10 en 0.907 / hi 0.921 / hinglish 0.935.
     def test_production_path_floor(self, report):
-        """Production searches with the original query + the orchestrator's English rewrite."""
-        r = report["hybrid+en (oracle)"]
+        """Production searches with the query + English rewrite + statutory terms (orchestrator)."""
+        r = report["hybrid+en+terms (oracle)"]
         assert r["en"]["mrr@10"] >= 0.85
         assert r["hi"]["mrr@10"] >= 0.85
-        assert r["hinglish"]["mrr@10"] >= 0.75
-        # 2026-11-26, + 2 Labour Codes (4.6k chunks): "fired without notice" misses top-5 in en
-        # (statute says "retrenchment"; curated summary ranks #8). Known issue in CLAUDE.md.
-        # 2026-11-28, + OSH Code (5.2k chunks): the Hindi "wrongful termination" query ranks
-        # its first relevant doc #4 locally and #6 on CI (CPU torch); same known issue.
-        assert r["en"]["hit@5"] >= 0.94 and r["hi"]["hit@5"] >= 0.94
+        assert r["hinglish"]["mrr@10"] >= 0.85
+        assert r["en"]["hit@5"] == 1.0 and r["hinglish"]["hit@5"] == 1.0
+        # Hindi "wrongful termination" ranks #4 locally; CI (CPU torch) can shift one rank
+        assert r["hi"]["hit@5"] >= 0.94
+
+    def test_statutory_terms_fix_informal_wording(self, report):
+        """Known issue 8: informal wording ("fired without notice") reaches the statute via terms."""
+        with_terms, without = report["hybrid+en+terms (oracle)"], report["hybrid+en (oracle)"]
+        assert with_terms["en"]["hit@5"] > without["en"]["hit@5"]
+        assert with_terms["hinglish"]["mrr@10"] >= without["hinglish"]["mrr@10"] + 0.05
 
     def test_hybrid_floor_without_rewrite(self, report):
         r = report["hybrid (RRF)"]

@@ -1,6 +1,7 @@
 """
 PAID: calls the real orchestrator (gpt-4o-mini) once per eval query to collect
-its English search rewrite (search_query_en), for the live retrieval eval.
+its English search rewrite (search_query_en) and statutory terms (search_terms_en),
+for the live retrieval eval.
 
     python -m backend.evaluation.generate_rewrites --out rewrites.json [--langs hi,hinglish]
     python -m backend.evaluation.retrieval_eval --llm-rewrites rewrites.json
@@ -28,7 +29,7 @@ def main():
         for lang in langs:
             key = f"{item['id']}:{lang}"
             out = orchestrator_agent(initial_state(user_query=item[lang]))
-            rewrites[key] = out.get("search_query_en", "")
+            rewrites[key] = [out.get("search_query_en", ""), out.get("search_terms_en", "")]
             print(f"{key:<32} -> {rewrites[key]}")
 
     with open(args.out, "w", encoding="utf-8") as f:

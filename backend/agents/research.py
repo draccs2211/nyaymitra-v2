@@ -121,10 +121,10 @@ def research_agent(state: NyayMitraState) -> dict:
     query = state.get("user_query", "")
     domain = state.get("legal_domain", "general")
 
-    # Original query + orchestrator's English rewrite, fused (helps Hindi/Hinglish
-    # against the English corpus; see backend/evaluation/retrieval_eval.py)
-    rewrite = state.get("search_query_en", "")
-    rag_results = hybrid_rag.search(query, domain, extra_queries=[rewrite] if rewrite else None,
+    # Original query + orchestrator's English rewrite + statutory terms, fused (helps
+    # Hindi/Hinglish and informal wording against statute text; see retrieval_eval.py)
+    extra = [q for q in (state.get("search_query_en", ""), state.get("search_terms_en", "")) if q]
+    rag_results = hybrid_rag.search(query, domain, extra_queries=extra or None,
                                     jurisdiction=state.get("jurisdiction") or "IN")
     sections = ipc_sections_to_lookup(query, rag_results)
 

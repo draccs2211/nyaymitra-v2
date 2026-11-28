@@ -27,7 +27,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 FastAPI, LangGraph (interrupt + checkpointer), OpenAI gpt-4o-mini (NOT Groq), Pydantic, FastMCP (in-process client), ChromaDB + BM25 + RRF + Cohere rerank, sentence-transformers multilingual MiniLM, Redis (optional cache, circuit breaker), PostgreSQL/SQLAlchemy, JWT + bcrypt, LangSmith `@traceable`.
 
 ## Pipeline
-guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_query_en`) run in parallel -> dispatch -> research | referral-only -> analysis -> drafting? -> referral? -> verification -> human_approval (interrupt when pending) -> END
+guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_query_en`, `search_terms_en`) run in parallel -> dispatch -> research | referral-only -> analysis -> drafting? -> referral? -> verification -> human_approval (interrupt when pending) -> END
 
 ## Key modules
 - `backend/state.py` — `NyayMitraState` + `initial_state()` (single source of state keys)
@@ -52,7 +52,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 5. Cases are visible only to their creator, not firm colleagues (product decision)
 6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
 7. Indian Kanoon API key not purchased (research reports `not_configured`)
-8. Retrieval misses informal labour phrasing ("fired without notice" does not reach IRC s.70 retrenchment in en; the Hindi version ranks #4-6 after the OSH Code) since the Labour Codes were added; fix via statutory-term rewrite or rerank
+8. Informal wording ("fired without notice") vs statute terms: orchestrator now emits `search_terms_en` (statutory vocabulary, no Acts/sections) as a third retrieval query; with hand-written terms all eval items hit top-5 (Hindi wrongful_termination still #4). Not yet verified with real LLM terms: `python -m backend.evaluation.generate_rewrites` (paid, 54 calls) then `retrieval_eval --llm-rewrites`
 
 ## Later
 Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.
