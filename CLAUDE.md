@@ -35,6 +35,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 - `backend/mcp_client.py` — MCP `call_tool` with timeout/retry, `MCPCallError` for fallback
 - `backend/utils/citations.py` — citation guard (provisions not in research context)
 - `backend/rag/provisions.py` — exact lookup of user-cited provisions
+- `backend/templates.py` — loads `data/templates/document_templates.json` (edit templates there only)
 - `backend/rag/metadata.py` — corpus metadata schema; `backend/versioning.py` — cache fingerprints
 
 ## Rules
@@ -48,7 +49,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 ## Known issues (priority order)
 1. Legal content needs lawyer review: 13 Act files in `data/legal_corpus/` (Industrial Relations Code, Code on Social Security and OSH Code are the 2020 Gazette text as enacted, converted with `scripts/gazette_to_md.py`. Per owner: all four Labour Codes in force from 21 Nov 2025; IRC s.104(1)/(1A) as amended by the IRC (Amendment) Act, 2026 (Act 1 of 2026, from the Gazette); OSH Code 2020 is the Gazette text as enacted. Curated summaries on Payment of Wages Act / Industrial Disputes Act carry a repeal note. POSH Act 2013 is India Code text as on 1 Aug 2026) (BNS sections 20 and 34 were empty after conversion; filled with their one-line text, confirmed by the owner and consistent with IPC 82/96 in the mapping); IPC->BNS mapping `data/reference/ipc_bns_mapping.json`; UP Rent Act "30-day deposit return" claim in `curated_summaries.jsonl`
 2. Approval checkpointer is in-memory (`get_checkpointer()` in `pipeline.py`): pending reviews are marked `expired` (410) after a restart. Local Postgres `DATABASE_URL` doesn't connect; fix it, then use a Postgres saver (needs `langgraph-checkpoint-postgres`)
-3. DLSA referral covers UP only (`data/referral/up_dlsa_directory.json`, 74 of 75 districts — Amethi missing, 16 without phone); templates MCP server not wired
+3. DLSA referral covers UP only (`data/referral/up_dlsa_directory.json`, 74 of 75 districts — Amethi missing, 16 without phone). Document templates: single source `data/templates/document_templates.json` (served by the templates MCP server, drafting falls back to the file); wording needs lawyer review (the old MCP copy had drifted, the drafting agent's wording was kept)
 4. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
 5. Cases are visible only to their creator, not firm colleagues (product decision)
 6. Cited provisions ("BNS 318"): orchestrator extracts `cited_provisions`; research fetches the exact corpus text (`backend/rag/provisions.py`, Act name resolved with matching year) or lists it in `unresolved_provisions`. LLM extraction verified 2026-11-28: 15/15 real gpt-4o-mini cases (en/hi/hinglish, none invented) in `tests/test_orchestrator_live.py` (paid). Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) remain unused

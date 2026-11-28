@@ -1,7 +1,8 @@
 """
 Drafting Agent - NyayMitra 2.0
 1. LLM extracts document type + stated facts (never guessed; missing -> placeholder)
-2. LLM drafts English + Hindi using the reviewed templates as format reference,
+2. LLM drafts English + Hindi using the reviewed template (templates MCP server,
+   data/templates/document_templates.json) as format reference,
    citing only provisions present in the research context
 3. Citation guard flags provisions not found in that context
 Falls back to deterministic template filling if the LLM fails.
@@ -9,6 +10,8 @@ Falls back to deterministic template filling if the LLM fails.
 from backend.state import NyayMitraState, initial_state
 from backend.llm import Usage, chat_json
 from backend.agents.schemas import DraftFields, DraftingOutput, DraftLLMOutput, to_state
+from backend.mcp_client import MCPCallError, call_tool, run_sync
+from backend.templates import get_template as load_template
 from backend.utils.citations import cited_numbers, find_unverified_citations, research_context  # noqa: F401
 from langsmith import traceable
 import logging
@@ -19,259 +22,17 @@ from datetime import datetime
 import json
 
 
-DOCUMENT_TEMPLATES = {
-    "legal_notice": {
-        "hindi": """कानूनी नोटिस
-
-दिनांक: {date}
-
-प्रति,
-{recipient_name}
-{recipient_address}
-
-विषय: {subject}
-
-महोदय/महोदया,
-
-मैं {sender_name}, निवासी {sender_address}, आपको इस नोटिस के माध्यम से सूचित करता/करती हूं कि:
-
-{facts}
-
-अतः आपसे अनुरोध है कि इस नोटिस की प्राप्ति के {days} दिनों के भीतर {relief} करें।
-
-यदि आप ऐसा करने में विफल रहते हैं, तो मुझे कानूनी कार्रवाई करने के लिए बाध्य होना पड़ेगा।
-
-भवदीय,
-{sender_name}
-{sender_address}
-{sender_phone}""",
-
-        "english": """LEGAL NOTICE
-
-Date: {date}
-
-To,
-{recipient_name}
-{recipient_address}
-
-Subject: {subject}
-
-Sir/Madam,
-
-I, {sender_name}, resident of {sender_address}, hereby serve you this legal notice:
-
-{facts}
-
-You are hereby called upon to {relief} within {days} days of receipt of this notice.
-
-Failing which, I shall be constrained to initiate appropriate legal proceedings against you without further notice.
-
-Yours faithfully,
-{sender_name}
-{sender_address}
-{sender_phone}"""
-    },
-
-    "rti_application": {
-        "hindi": """सूचना का अधिकार अधिनियम, 2005 के अंतर्गत सूचना हेतु आवेदन
-
-सेवा में,
-जन सूचना अधिकारी
-{department_name}
-{department_address}
-
-दिनांक: {date}
-
-विषय: RTI अधिनियम 2005 की धारा 6(1) के अंतर्गत सूचना हेतु आवेदन
-
-महोदय/महोदया,
-
-मैं {applicant_name}, निवासी {applicant_address}, आपसे निम्नलिखित सूचना प्राप्त करना चाहता/चाहती हूं:
-
-{information_requested}
-
-आवेदन शुल्क: ₹10/- (BPL श्रेणी से छूट)
-
-आवेदक का नाम: {applicant_name}
-पता: {applicant_address}
-दूरभाष: {applicant_phone}
-हस्ताक्षर: ________________
-दिनांक: {date}""",
-
-        "english": """APPLICATION UNDER RIGHT TO INFORMATION ACT, 2005
-
-To,
-The Public Information Officer
-{department_name}
-{department_address}
-
-Date: {date}
-
-Subject: Application for Information under Section 6(1) of RTI Act 2005
-
-Sir/Madam,
-
-I, {applicant_name}, resident of {applicant_address}, wish to obtain the following information:
-
-{information_requested}
-
-Application Fee: Rs. 10/- (Exempted for BPL category)
-
-Name: {applicant_name}
-Address: {applicant_address}
-Phone: {applicant_phone}
-Signature: ________________
-Date: {date}"""
-    },
-
-    "consumer_complaint": {
-        "hindi": """उपभोक्ता फोरम में शिकायत
-
-{forum_name}
-{forum_address}
-
-दिनांक: {date}
-
-शिकायतकर्ता: {complainant_name}
-पता: {complainant_address}
-
-विरुद्ध
-
-प्रतिपक्षी: {opposite_party}
-पता: {opposite_address}
-
-शिकायत का विवरण:
-{complaint_details}
-
-राहत की मांग:
-{relief_sought}
-
-शपथपत्र:
-मैं {complainant_name} शपथपूर्वक कहता/कहती हूं कि उपरोक्त तथ्य सत्य हैं।
-
-हस्ताक्षर: ________________
-दिनांक: {date}""",
-
-        "english": """COMPLAINT BEFORE CONSUMER FORUM
-
-{forum_name}
-{forum_address}
-
-Date: {date}
-
-Complainant: {complainant_name}
-Address: {complainant_address}
-
-Versus
-
-Opposite Party: {opposite_party}
-Address: {opposite_address}
-
-Facts of Complaint:
-{complaint_details}
-
-Relief Sought:
-{relief_sought}
-
-Affidavit:
-I, {complainant_name}, solemnly affirm that the above facts are true.
-
-Signature: ________________
-Date: {date}"""
-    },
-
-    "police_complaint": {
-        "hindi": """थाना प्रभारी को शिकायत पत्र
-
-सेवा में,
-थाना प्रभारी
-{police_station}
-
-दिनांक: {date}
-
-विषय: {subject} के संबंध में शिकायत
-
-महोदय,
-
-मैं {complainant_name}, निवासी {complainant_address}, आपको सूचित करना चाहता/चाहती हूं कि:
-
-घटना की तारीख: {incident_date}
-घटना का स्थान: {incident_location}
-
-घटना का विवरण:
-{incident_details}
-
-आरोपी का नाम (यदि ज्ञात): {accused_name}
-
-अतः आपसे प्रार्थना है कि उचित कार्रवाई की जाए।
-
-प्रार्थी,
-{complainant_name}
-{complainant_address}
-{complainant_phone}""",
-
-        "english": """COMPLAINT TO POLICE STATION
-
-To,
-The Station House Officer
-{police_station}
-
-Date: {date}
-
-Subject: Complaint regarding {subject}
-
-Sir,
-
-I, {complainant_name}, resident of {complainant_address}, wish to report that:
-
-Date of Incident: {incident_date}
-Place of Incident: {incident_location}
-
-Details of Incident:
-{incident_details}
-
-Name of Accused (if known): {accused_name}
-
-I request you to take appropriate action in the matter.
-
-Complainant,
-{complainant_name}
-{complainant_address}
-{complainant_phone}"""
-    },
-
-    "vakalatnama": {
-        "hindi": """वकालतनामा
-
-न्यायालय: {court_name}
-दिनांक: {date}
-
-मैं {client_name}, निवासी {client_address}, एतद्द्वारा {lawyer_name} 
-(नामांकन संख्या: {lawyer_enrollment}) को अपना अधिवक्ता नियुक्त करता/करती हूं।
-
-मामला: {case_details}
-
-मैं उपरोक्त अधिवक्ता को मेरी ओर से सभी कानूनी कार्रवाई करने का अधिकार देता/देती हूं।
-
-मुवक्किल हस्ताक्षर: ________________
-दिनांक: {date}""",
-
-        "english": """VAKALATNAMA
-
-Court: {court_name}
-Date: {date}
-
-I, {client_name}, resident of {client_address}, hereby appoint {lawyer_name}
-(Enrollment No: {lawyer_enrollment}) as my Advocate.
-
-Matter: {case_details}
-
-I authorize the above advocate to act on my behalf in all legal proceedings.
-
-Client Signature: ________________
-Date: {date}"""
-    }
-}
+def fetch_template(doc_type: str):
+    """Reviewed template {english, hindi} via the templates MCP server; if the server
+    call fails, read the same file directly. None if there is no template for doc_type."""
+    try:
+        data = run_sync(call_tool("templates", "get_template", {"doc_type": doc_type, "language": "both"}))
+    except MCPCallError as e:
+        logger.warning(f"templates MCP unavailable, reading file directly: {e}")
+        return load_template(doc_type)
+    if data.get("status") != "success":
+        return None
+    return {"english": data["template_english"], "hindi": data["template_hindi"]}
 
 
 PLACEHOLDERS = {
@@ -388,9 +149,8 @@ def fill_template(template: str, values: dict) -> str:
     return result
 
 
-def _allowed_context(state: NyayMitraState, doc_type: str) -> str:
+def _allowed_context(state: NyayMitraState, tmpl) -> str:
     parts = [research_context(state)]
-    tmpl = DOCUMENT_TEMPLATES.get(doc_type)
     if tmpl:  # curated templates may cite their own enabling provision (e.g. RTI s.6(1))
         parts += [tmpl["english"], tmpl["hindi"]]
     return "\n".join(p for p in parts if p)
@@ -415,14 +175,13 @@ def missing_fields(fields: DraftFields) -> list:
     return [f for f in REQUIRED_FIELDS.get(fields.document_type, []) if getattr(fields, f) is None]
 
 
-def template_fallback(fields: DraftFields) -> tuple:
+def template_fallback(fields: DraftFields, tmpl) -> tuple:
     """Deterministic fill of the reviewed template with whatever was extracted."""
     values = dict(PLACEHOLDERS, date=_today())
     for key, attr in FIELD_MAP.items():
         val = getattr(fields, attr)
         if val is not None:
             values[key] = val
-    tmpl = DOCUMENT_TEMPLATES.get(fields.document_type)
     if tmpl is None:  # "other": no reviewed template - minimal skeleton
         title = fields.document_title or "[Document Title]"
         body = (f"{title.upper()}\n\nDate: {values['date']}\n\n"
@@ -446,8 +205,8 @@ def drafting_agent(state: NyayMitraState) -> dict:
         fields = DraftFields()
 
     doc_type = fields.document_type
-    allowed = _allowed_context(state, doc_type)
-    tmpl = DOCUMENT_TEMPLATES.get(doc_type)
+    tmpl = fetch_template(doc_type)
+    allowed = _allowed_context(state, tmpl)
 
     # 2. Drafting (LLM)
     method = "llm"
@@ -469,7 +228,7 @@ def drafting_agent(state: NyayMitraState) -> dict:
     except Exception as e:
         logger.warning(f"LLM drafting failed, using template: {e}")
         method = "template_fallback"
-        doc_english, doc_hindi = template_fallback(fields)
+        doc_english, doc_hindi = template_fallback(fields, tmpl)
 
     unverified = find_unverified_citations([doc_english, doc_hindi], allowed)
     missing = missing_fields(fields)

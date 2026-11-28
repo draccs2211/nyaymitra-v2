@@ -1,0 +1,32 @@
+{
+ "legal_notice": {
+  "name": "Legal Notice",
+  "description": "General legal notice to any party",
+  "english": "LEGAL NOTICE\n\nDate: {date}\n\nTo,\n{recipient_name}\n{recipient_address}\n\nSubject: {subject}\n\nSir/Madam,\n\nI, {sender_name}, resident of {sender_address}, hereby serve you this legal notice:\n\n{facts}\n\nYou are hereby called upon to {relief} within {days} days of receipt of this notice.\n\nFailing which, I shall be constrained to initiate appropriate legal proceedings against you without further notice.\n\nYours faithfully,\n{sender_name}\n{sender_address}\n{sender_phone}",
+  "hindi": "कानूनी नोटिस\n\nदिनांक: {date}\n\nप्रति,\n{recipient_name}\n{recipient_address}\n\nविषय: {subject}\n\nमहोदय/महोदया,\n\nमैं {sender_name}, निवासी {sender_address}, आपको इस नोटिस के माध्यम से सूचित करता/करती हूं कि:\n\n{facts}\n\nअतः आपसे अनुरोध है कि इस नोटिस की प्राप्ति के {days} दिनों के भीतर {relief} करें।\n\nयदि आप ऐसा करने में विफल रहते हैं, तो मुझे कानूनी कार्रवाई करने के लिए बाध्य होना पड़ेगा।\n\nभवदीय,\n{sender_name}\n{sender_address}\n{sender_phone}"
+ },
+ "rti_application": {
+  "name": "RTI Application",
+  "description": "Right to Information application",
+  "english": "APPLICATION UNDER RIGHT TO INFORMATION ACT, 2005\n\nTo,\nThe Public Information Officer\n{department_name}\n{department_address}\n\nDate: {date}\n\nSubject: Application for Information under Section 6(1) of RTI Act 2005\n\nSir/Madam,\n\nI, {applicant_name}, resident of {applicant_address}, wish to obtain the following information:\n\n{information_requested}\n\nApplication Fee: Rs. 10/- (Exempted for BPL category)\n\nName: {applicant_name}\nAddress: {applicant_address}\nPhone: {applicant_phone}\nSignature: ________________\nDate: {date}",
+  "hindi": "सूचना का अधिकार अधिनियम, 2005 के अंतर्गत सूचना हेतु आवेदन\n\nसेवा में,\nजन सूचना अधिकारी\n{department_name}\n{department_address}\n\nदिनांक: {date}\n\nविषय: RTI अधिनियम 2005 की धारा 6(1) के अंतर्गत सूचना हेतु आवेदन\n\nमहोदय/महोदया,\n\nमैं {applicant_name}, निवासी {applicant_address}, आपसे निम्नलिखित सूचना प्राप्त करना चाहता/चाहती हूं:\n\n{information_requested}\n\nआवेदन शुल्क: ₹10/- (BPL श्रेणी से छूट)\n\nआवेदक का नाम: {applicant_name}\nपता: {applicant_address}\nदूरभाष: {applicant_phone}\nहस्ताक्षर: ________________\nदिनांक: {date}"
+ },
+ "consumer_complaint": {
+  "name": "Consumer Forum Complaint",
+  "description": "Complaint to consumer forum",
+  "english": "COMPLAINT BEFORE CONSUMER FORUM\n\n{forum_name}\n{forum_address}\n\nDate: {date}\n\nComplainant: {complainant_name}\nAddress: {complainant_address}\n\nVersus\n\nOpposite Party: {opposite_party}\nAddress: {opposite_address}\n\nFacts of Complaint:\n{complaint_details}\n\nRelief Sought:\n{relief_sought}\n\nAffidavit:\nI, {complainant_name}, solemnly affirm that the above facts are true.\n\nSignature: ________________\nDate: {date}",
+  "hindi": "उपभोक्ता फोरम में शिकायत\n\n{forum_name}\n{forum_address}\n\nदिनांक: {date}\n\nशिकायतकर्ता: {complainant_name}\nपता: {complainant_address}\n\nविरुद्ध\n\nप्रतिपक्षी: {opposite_party}\nपता: {opposite_address}\n\nशिकायत का विवरण:\n{complaint_details}\n\nराहत की मांग:\n{relief_sought}\n\nशपथपत्र:\nमैं {complainant_name} शपथपूर्वक कहता/कहती हूं कि उपरोक्त तथ्य सत्य हैं।\n\nहस्ताक्षर: ________________\nदिनांक: {date}"
+ },
+ "police_complaint": {
+  "name": "Police Complaint",
+  "description": "Complaint to police station",
+  "english": "COMPLAINT TO POLICE STATION\n\nTo,\nThe Station House Officer\n{police_station}\n\nDate: {date}\n\nSubject: Complaint regarding {subject}\n\nSir,\n\nI, {complainant_name}, resident of {complainant_address}, wish to report that:\n\nDate of Incident: {incident_date}\nPlace of Incident: {incident_location}\n\nDetails of Incident:\n{incident_details}\n\nName of Accused (if known): {accused_name}\n\nI request you to take appropriate action in the matter.\n\nComplainant,\n{complainant_name}\n{complainant_address}\n{complainant_phone}",
+  "hindi": "थाना प्रभारी को शिकायत पत्र\n\nसेवा में,\nथाना प्रभारी\n{police_station}\n\nदिनांक: {date}\n\nविषय: {subject} के संबंध में शिकायत\n\nमहोदय,\n\nमैं {complainant_name}, निवासी {complainant_address}, आपको सूचित करना चाहता/चाहती हूं कि:\n\nघटना की तारीख: {incident_date}\nघटना का स्थान: {incident_location}\n\nघटना का विवरण:\n{incident_details}\n\nआरोपी का नाम (यदि ज्ञात): {accused_name}\n\nअतः आपसे प्रार्थना है कि उचित कार्रवाई की जाए।\n\nप्रार्थी,\n{complainant_name}\n{complainant_address}\n{complainant_phone}"
+ },
+ "vakalatnama": {
+  "name": "Vakalatnama",
+  "description": "Lawyer appointment document",
+  "english": "VAKALATNAMA\n\nCourt: {court_name}\nDate: {date}\n\nI, {client_name}, resident of {client_address}, hereby appoint {lawyer_name}\n(Enrollment No: {lawyer_enrollment}) as my Advocate.\n\nMatter: {case_details}\n\nI authorize the above advocate to act on my behalf in all legal proceedings.\n\nClient Signature: ________________\nDate: {date}",
+  "hindi": "वकालतनामा\n\nन्यायालय: {court_name}\nदिनांक: {date}\n\nमैं {client_name}, निवासी {client_address}, एतद्द्वारा {lawyer_name} \n(नामांकन संख्या: {lawyer_enrollment}) को अपना अधिवक्ता नियुक्त करता/करती हूं।\n\nमामला: {case_details}\n\nमैं उपरोक्त अधिवक्ता को मेरी ओर से सभी कानूनी कार्रवाई करने का अधिकार देता/देती हूं।\n\nमुवक्किल हस्ताक्षर: ________________\nदिनांक: {date}"
+ }
+}
