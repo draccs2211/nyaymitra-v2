@@ -78,6 +78,18 @@ class GuardianOutput(_Base):
 
 # ─── Orchestrator ─────────────────────────────────────────────────────────────
 
+class CitedProvision(BaseModel):
+    """A provision the user explicitly cites: full Act name + section number."""
+    model_config = ConfigDict(extra="ignore")
+    act: str = ""
+    section: str = ""
+
+    @field_validator("act", "section", mode="before")
+    @classmethod
+    def _clean(cls, v):
+        return " ".join(str(v or "").split())[:200]
+
+
 class ClassificationLLMOutput(BaseModel):
     """Validates the raw JSON returned by the orchestrator LLM (lenient per field)."""
     model_config = ConfigDict(extra="ignore")
@@ -87,6 +99,7 @@ class ClassificationLLMOutput(BaseModel):
     language: Language = "en"
     search_query_en: str = ""
     search_terms_en: str = ""     # statutory vocabulary for the issue (no Acts / section numbers)
+    cited_provisions: List[CitedProvision] = Field(default_factory=list)   # only what the user cites
     jurisdiction: str = "IN"      # IN-XX if the query names an Indian state/UT (or a city in it)
     district: str = ""            # official district name if the query names a district/city
     urgency: Urgency = "low"
@@ -115,6 +128,13 @@ class ClassificationLLMOutput(BaseModel):
     @classmethod
     def _search_query(cls, v):
         return " ".join(str(v).split())[:300] if v else ""
+
+    @field_validator("cited_provisions", mode="before")
+    @classmethod
+    def _cited(cls, v):
+        # keep well-formed {act, section} items with a section; drop anything else
+        items = v if isinstance(v, list) else []
+        return [i for i in items if isinstance(i, dict) and str(i.get("section") or "").strip()][:5]
 
     @field_validator("search_terms_en", mode="after")
     @classmethod
@@ -171,6 +191,7 @@ class OrchestratorOutput(_Base):
     language: Language
     search_query_en: str = ""
     search_terms_en: str = ""
+    cited_provisions: List[CitedProvision] = Field(default_factory=list)
     jurisdiction: Optional[str] = None
     district: Optional[str] = None
     classification: ClassificationMeta
@@ -213,6 +234,8 @@ class ResearchOutput(_Base):
     research_results: List[RetrievedDoc] = Field(default_factory=list)
     kanoon_cases: List[KanoonCase] = Field(default_factory=list)
     ipc_sections: List[RetrievedDoc] = Field(default_factory=list)
+    cited_sections: List[RetrievedDoc] = Field(default_factory=list)     # exact text of user-cited provisions
+    unresolved_provisions: List[str] = Field(default_factory=list)       # cited but not in the corpus
     source_status: Dict[str, SourceStatus] = Field(default_factory=dict)
 
 

@@ -32,5 +32,6 @@ def research_context(state: dict) -> str:
     """Text a generated answer may cite from: corpus results, statutory refs, case snippets."""
     parts = [r.get("content", "") for r in state.get("research_results", [])]
     parts += [r.get("content", "") for r in state.get("ipc_sections", [])]
+    parts += [r.get("content", "") for r in state.get("cited_sections", [])]
     parts += [c.get("snippet", "") for c in state.get("kanoon_cases", [])]
     return "\n".join(p for p in parts if p)

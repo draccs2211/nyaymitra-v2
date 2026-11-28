@@ -21,6 +21,7 @@ logger = logging.getLogger("nyaymitra.research")
 from backend.agents.schemas import KanoonCase, ResearchOutput, RetrievedDoc, to_state
 from backend.mcp_client import MCPCallError, call_tool, run_sync
 from backend.rag.hybrid_search import hybrid_rag
+from backend.rag.provisions import lookup_cited
 from backend.state import NyayMitraState
 
 MAX_KANOON_RESULTS = 5
@@ -126,6 +127,8 @@ def research_agent(state: NyayMitraState) -> dict:
     extra = [q for q in (state.get("search_query_en", ""), state.get("search_terms_en", "")) if q]
     rag_results = hybrid_rag.search(query, domain, extra_queries=extra or None,
                                     jurisdiction=state.get("jurisdiction") or "IN")
+    # Provisions the user cites by number: exact corpus text, or reported as not in corpus
+    cited, unresolved = lookup_cited(state.get("cited_provisions") or [], hybrid_rag.corpus_docs())
     sections = ipc_sections_to_lookup(query, rag_results)
 
     (kanoon_cases, kanoon_status), *ipc_lookups = run_sync(_gather_mcp(query, sections))
@@ -146,5 +149,7 @@ def research_agent(state: NyayMitraState) -> dict:
         research_results=[RetrievedDoc(**r) for r in rag_results],
         kanoon_cases=[KanoonCase(**c) for c in kanoon_cases],
         ipc_sections=[RetrievedDoc(**r) for r in corpus_sections + mcp_sections],
+        cited_sections=[RetrievedDoc(**r) for r in cited],
+        unresolved_provisions=unresolved,
         source_status=source_status,
     ))

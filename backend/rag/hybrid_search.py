@@ -185,6 +185,11 @@ class HybridRAG:
             for i, c, m in zip(data["ids"], data["documents"], metas)
         ])
 
+    def corpus_docs(self) -> List[Dict]:
+        """Every indexed chunk as {'id','content','metadata'} (in-memory BM25 copy, no DB call)."""
+        return [{"id": i, "content": c, "metadata": m}
+                for i, c, m in zip(self.bm25_ids, self.bm25_docs, self.bm25_metas)]
+
     # ── Embeddings ────────────────────────────────────────────────────────────
 
     def get_embedding(self, text: str) -> List[float]:

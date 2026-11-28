@@ -34,6 +34,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 - `backend/agents/schemas.py` — Pydantic output per agent; agents return `to_state(model)`
 - `backend/mcp_client.py` — MCP `call_tool` with timeout/retry, `MCPCallError` for fallback
 - `backend/utils/citations.py` — citation guard (provisions not in research context)
+- `backend/rag/provisions.py` — exact lookup of user-cited provisions
 - `backend/rag/metadata.py` — corpus metadata schema; `backend/versioning.py` — cache fingerprints
 
 ## Rules
@@ -50,7 +51,7 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 3. DLSA referral covers UP only (`data/referral/up_dlsa_directory.json`, 74 of 75 districts — Amethi missing, 16 without phone); templates MCP server not wired
 4. Rate limiter + checkpointer are per-process (move to Redis for multi-worker); Redis not running locally
 5. Cases are visible only to their creator, not firm colleagues (product decision)
-6. Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) not used — need LLM/exact lookup first
+6. Cited provisions ("BNS 318"): orchestrator extracts `cited_provisions`; research fetches the exact corpus text (`backend/rag/provisions.py`, Act name resolved with matching year) or lists it in `unresolved_provisions`. LLM extraction not yet checked with real gpt-4o-mini (paid). Keyword-routed MCP tools (`get_legal_provision`, `search_up_laws`) remain unused
 7. Indian Kanoon API key not purchased (research reports `not_configured`)
 8. Informal wording ("fired without notice") vs statute terms: mitigated. Orchestrator emits `search_terms_en` (statutory vocabulary; phrases with numbers dropped) as a third retrieval query. Verified 2026-11-28 with real gpt-4o-mini terms (54 calls): hit@5 1.0 in en/hi/hinglish, MRR@10 en 0.963 / hi 0.931 / hinglish 0.880. Re-check after prompt changes: `python -m backend.evaluation.generate_rewrites --out r.json` (paid) then `retrieval_eval --llm-rewrites r.json`
 

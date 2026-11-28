@@ -32,6 +32,9 @@ class NyayMitraState(TypedDict):
     research_results: List[Dict[str, Any]]
     kanoon_cases: List[Dict[str, Any]]
     ipc_sections: List[Dict[str, Any]]
+    cited_provisions: List[Dict[str, Any]]   # [{act, section}] the user explicitly cites (orchestrator)
+    cited_sections: List[Dict[str, Any]]     # corpus text of those provisions (research, exact lookup)
+    unresolved_provisions: List[str]         # cited provisions not found in the corpus
     source_status: Dict[str, str]    # per external source: ok / not_configured / unavailable / error / skipped
 
     # Analysis (set by analysis agent)
@@ -98,6 +101,9 @@ def initial_state(**overrides) -> NyayMitraState:
         "research_results": [],
         "kanoon_cases": [],
         "ipc_sections": [],
+        "cited_provisions": [],
+        "cited_sections": [],
+        "unresolved_provisions": [],
         "source_status": {},
         "case_analysis": {},
         "analysis_unverified_citations": [],

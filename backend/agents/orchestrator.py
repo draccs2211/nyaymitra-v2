@@ -32,6 +32,7 @@ Analyze the given legal query and return a JSON response with the following fiel
     "urgency": "<one of: critical, high, medium, low>",
     "key_issues": ["<issue 1>", "<issue 2>"],
     "suggested_acts": ["<Act 1>", "<Act 2>"],
+    "cited_provisions": [{"act": "<full official Act name with year>", "section": "<section number>"}],
     "reasoning": "<one line explanation of classification>"
 }
 
@@ -74,6 +75,14 @@ Statutory terms (search_terms_en):
   compensation to allottee").
 - 3 to 6 short phrases, English, comma-separated. Legal vocabulary only:
   NO Act names, NO section numbers, NO facts that the query does not state.
+
+Cited provisions (cited_provisions):
+- ONLY provisions the user explicitly names with a section number (e.g. "BNS 318", "section 6 of RTI",
+  "IPC 420", "धारा 498A"). Give the Act's full official name with year, expanding abbreviations
+  (BNS -> "The Bharatiya Nyaya Sanhita, 2023", BNSS -> "The Bharatiya Nagarik Suraksha Sanhita, 2023",
+  IPC -> "The Indian Penal Code, 1860", CrPC -> "The Code of Criminal Procedure, 1973").
+- If the user gives a section without the Act and the Act is not clear from the query, leave act "".
+- Empty list if no section is cited. Never add provisions the user did not cite.
 
 Language detection:
 - hi: Query predominantly in Hindi (Devanagari script)
@@ -127,6 +136,7 @@ Classify this query and return JSON."""
             language=result.language,
             search_query_en=result.search_query_en,
             search_terms_en=result.search_terms_en,
+            cited_provisions=result.cited_provisions,
             # an explicit jurisdiction on the request wins over the detected one
             jurisdiction=(state.get("jurisdiction") if state.get("jurisdiction", "IN") != "IN"
                           else result.jurisdiction),

@@ -100,6 +100,20 @@ def _build_prompt(state: NyayMitraState) -> str:
             doc_jur = (result.get("metadata") or {}).get("jurisdiction", "IN")
             label = f"[applies only in {doc_jur}] " if doc_jur != "IN" else ""
             context_parts.append(f"- {label}{result.get('content', '')[:400]}")
+    cited = state.get("cited_sections", [])
+    unresolved = state.get("unresolved_provisions", [])
+    if cited or unresolved:
+        context_parts.append("\nProvisions cited by the user (official text from the corpus):")
+        per_provision: dict = {}
+        for s in cited:     # first 2 chunks of each cited provision, max 4 provisions
+            m = s.get("metadata") or {}
+            per_provision.setdefault((m.get("act"), m.get("section")), []).append(s)
+        for chunks in list(per_provision.values())[:4]:
+            for s in chunks[:2]:
+                context_parts.append(f"- {s.get('content', '')[:600]}")
+        if unresolved:
+            context_parts.append("Cited but NOT in the corpus (text not verified; do not state their content): "
+                                 + "; ".join(unresolved))
     mcp_sections = [s for s in state.get("ipc_sections", []) if s.get("source") == "mcp"]
     if mcp_sections:
         context_parts.append("\nIPC -> BNS references (quick reference, verify official text):")
