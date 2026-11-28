@@ -112,3 +112,10 @@ class TestWiring:
         assert f"{RTI} — Section 6" in prompt                                     # 2nd provision not crowded out
         assert "NOT in the corpus" in prompt and "Factories Act, 1948 s.2" in prompt
         assert "Section 318" in research_context(state)
+
+    def test_state_law_cited_is_labelled(self):
+        from backend.agents.analysis import _build_prompt
+        up = chunk("The Uttar Pradesh Urban Buildings (Regulation of Letting, Rent and Eviction) Act, 1972", "21")
+        up["metadata"]["jurisdiction"] = "IN-UP"
+        prompt = _build_prompt(make_state(user_query="q", jurisdiction="IN-DL", cited_sections=[up]))
+        assert "[applies only in IN-UP]" in prompt

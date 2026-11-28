@@ -110,7 +110,9 @@ def _build_prompt(state: NyayMitraState) -> str:
             per_provision.setdefault((m.get("act"), m.get("section")), []).append(s)
         for chunks in list(per_provision.values())[:4]:
             for s in chunks[:2]:
-                context_parts.append(f"- {s.get('content', '')[:600]}")
+                doc_jur = (s.get("metadata") or {}).get("jurisdiction", "IN")
+                label = f"[applies only in {doc_jur}] " if doc_jur != "IN" else ""
+                context_parts.append(f"- {label}{s.get('content', '')[:600]}")
         if unresolved:
             context_parts.append("Cited but NOT in the corpus (text not verified; do not state their content): "
                                  + "; ".join(unresolved))
