@@ -15,6 +15,7 @@ Multi-agent AI legal research assistant for Indian law firms (B2B "Mode 2" first
 - Install: `pip install -r requirements.txt` (unpinned versions on purpose)
 - Load legal data: `python -m backend.data_loader [--dry-run]` — corpus files in `data/legal_corpus/` (format: its README.md); idempotent, prunes docs no longer in the files
 - Run API: `uvicorn backend.main:app --reload --port 8000`
+- Frontend (React/Vite/TS, `frontend/`): `cd frontend; npm install; npm run dev` (http://localhost:5173, proxies `/api` to :8000); tests `npm test`; checks `npm run typecheck`, `npm run build`
 - Test one agent: `python -m backend.agents.<name>`
 - Free tests: `$env:HF_HUB_OFFLINE='1'; pytest -m "not paid"` (OpenAI/Cohere/Kanoon blocked by tests/conftest.py)
 - Paid tests (real OpenAI, ask first): `pytest -m paid`
@@ -56,5 +57,8 @@ guardian (urgency, never stops) ‖ orchestrator (`requested_actions`, `search_q
 7. Indian Kanoon API key not purchased (research reports `not_configured`)
 8. Informal wording ("fired without notice") vs statute terms: mitigated. Orchestrator emits `search_terms_en` (statutory vocabulary; phrases with numbers dropped) as a third retrieval query. Verified 2026-11-28 with real gpt-4o-mini terms (54 calls): hit@5 1.0 in en/hi/hinglish, MRR@10 en 0.963 / hi 0.931 / hinglish 0.880. Re-check after prompt changes: `python -m backend.evaluation.generate_rewrites --out r.json` (paid) then `retrieval_eval --llm-rewrites r.json`
 
+## Frontend
+Screens: sign-in, invite (paste code), research workspace (split view, progress polling via client `run_id`), review queue. Look: navy #1F3A5F / gold #A07A2C / off-white, Source Serif 4 + Inter + Noto Sans Devanagari; UI labels EN/HI in `src/lib/i18n.tsx`. No UI kit or CSS framework (ask before adding npm deps). Answer text is parsed from `analysis.render` output (`src/lib/answer.ts`; keep `CARD_HEADINGS` in sync with `HEADINGS`). Gap: approval can edit only `final_response`, so blanks filled in the draft are copy-only, not saved.
+
 ## Later
-Frontend (React/Vite), Sarvam voice, RAGAS + larger legal eval sets, deployment.
+Cases page + firm admin screens in the frontend, Sarvam voice, RAGAS + larger legal eval sets, deployment.
